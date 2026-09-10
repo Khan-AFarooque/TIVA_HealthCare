@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 
 export default function Header({ showLogo = true, showGreeting = false, userName = "" }) {
+  const logoSrc = `${import.meta.env.BASE_URL}assets/tiva-logo.png`;
+
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
@@ -11,7 +13,12 @@ export default function Header({ showLogo = true, showGreeting = false, userName
       <div className="glass mx-auto mt-4 flex max-w-6xl items-center justify-between rounded-2xl px-5 py-3">
         {showLogo && (
           <div className="flex items-center gap-2">
-            <img src="/assets/tiva-logo.png" alt="TIVA Logo" className="h-6 w-auto object-contain" />
+            <img
+              src={logoSrc}
+              onError={(e) => { e.currentTarget.src = "./assets/tiva-logo.png"; }}
+              alt="TIVA Logo"
+              className="h-6 w-auto object-contain"
+            />
             <p className="font-display text-lg font-bold text-brand-ink">TIVA</p>
           </div>
         )}

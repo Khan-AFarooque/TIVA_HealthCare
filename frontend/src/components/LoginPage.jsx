@@ -148,7 +148,8 @@ export default function LoginPage({ onLogin }) {
       >
         <div className="text-center mb-8">
           <img
-            src="/assets/tiva-logo.png"
+            src={`${import.meta.env.BASE_URL}assets/tiva-logo.png`}
+            onError={(e) => { e.currentTarget.src = "./assets/tiva-logo.png"; }}
             alt="TIVA Logo"
             className="mx-auto mb-3 w-48 h-auto object-contain"
           />

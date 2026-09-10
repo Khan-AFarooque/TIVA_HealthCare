@@ -63,6 +63,9 @@ import { autoPredictFromStoredData, saveGlucosePrediction } from "./utils/glucos
 import { saveMealEntry } from "./utils/dietPlanner";
 import { saveInsulinLog } from "./utils/insulinCalculator";
 
+// --- TIVA Logo Path ---
+const TIVA_LOGO = `${import.meta.env.BASE_URL}assets/tiva-logo.png`;
+
 // --- Sidebar Navigation Items ---
 const SIDEBAR_ITEMS = [
   { id: "dashboard", icon: LayoutDashboard, title: "Dashboard", desc: "Clinical Intelligence Hub" },
@@ -1194,7 +1197,8 @@ export default function App() {
                 title="Go to Dashboard Overview"
               >
                 <img
-                  src="/assets/tiva-logo.png"
+                  src={TIVA_LOGO}
+                  onError={(e) => { e.currentTarget.src = "./assets/tiva-logo.png"; }}
                   alt="TIVA Logo"
                   className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
                 />
@@ -1362,7 +1366,12 @@ export default function App() {
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                      <img src="/assets/tiva-logo.png" alt="TIVA Logo" className="h-8 w-auto" />
+                      <img
+                        src={TIVA_LOGO}
+                        onError={(e) => { e.currentTarget.src = "./assets/tiva-logo.png"; }}
+                        alt="TIVA Logo"
+                        className="h-8 w-auto"
+                      />
                     </div>
                     <button
                       type="button"

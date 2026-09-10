@@ -470,7 +470,8 @@ export default function DailyReportPage({ onBack, userId, profile, userName: pro
             {/* Logo and Titles */}
             <div className="flex items-center gap-3.5">
               <img
-                src="/assets/tiva-logo.png"
+                src={`${import.meta.env.BASE_URL}assets/tiva-logo.png`}
+                onError={(e) => { e.currentTarget.src = "./assets/tiva-logo.png"; }}
                 alt="TIVA Logo"
                 className="h-10 w-auto object-contain shrink-0"
               />
