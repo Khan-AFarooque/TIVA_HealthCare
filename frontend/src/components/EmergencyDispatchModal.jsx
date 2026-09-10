@@ -69,16 +69,23 @@ export default function EmergencyDispatchModal({
   const [editPhone, setEditPhone] = useState(caregiver?.phone || "");
   const [editRel, setEditRel] = useState(caregiver?.relationship || "");
 
+  // Only sync from props when not actively editing
   useEffect(() => {
-    if (caregiver?.phone) {
-      setEditPhone(caregiver.phone);
-      setEditName(caregiver.name || "");
-      setEditRel(caregiver.relationship || "Emergency Contact");
-      setIsEditing(false);
-    } else {
+    if (!isEditing && caregiver) {
+      if (caregiver.phone && caregiver.phone !== editPhone) setEditPhone(caregiver.phone);
+      if (caregiver.name && caregiver.name !== editName) setEditName(caregiver.name);
+      if (caregiver.relationship && caregiver.relationship !== editRel) {
+        setEditRel(caregiver.relationship);
+      }
+    }
+  }, [caregiver?.phone, caregiver?.name, caregiver?.relationship, isEditing]);
+
+  // When modal is opened, if no phone exists, enter editing mode
+  useEffect(() => {
+    if (isOpen && !caregiver?.phone) {
       setIsEditing(true);
     }
-  }, [caregiver]);
+  }, [isOpen, caregiver?.phone]);
 
   const activePhone = caregiver?.phone || editPhone;
   const activeName = caregiver?.name || editName || "Designated Caregiver";
@@ -129,19 +136,27 @@ export default function EmergencyDispatchModal({
   };
 
   const handleSaveContact = () => {
-    if (!editPhone.trim() || !userId) return;
+    if (!editPhone.trim()) return;
+    const activeUserId = userId || (() => {
+      try { return JSON.parse(localStorage.getItem("tiva_auth") || "{}")?.userId; } catch { return null; }
+    })();
+
     const updated = {
       name: editName.trim() || "Caregiver",
       phone: editPhone.trim(),
       relationship: editRel.trim() || "Emergency Contact",
     };
-    saveCaregiverInfo(userId, updated);
+    if (activeUserId) {
+      saveCaregiverInfo(activeUserId, updated);
+    }
     if (onCaregiverUpdated) onCaregiverUpdated(updated);
     setIsEditing(false);
     setDialNotice({
       type: "success",
       text: `Saved contact for ${updated.name} (${updated.phone}). Ready to call!`,
     });
+    try { window.dispatchEvent(new Event("tiva-data-updated")); } catch { /* ignore */ }
+    try { window.dispatchEvent(new Event("tiva-alert-updated")); } catch { /* ignore */ }
   };
 
   const handleQuickFillDemo = () => {
@@ -153,15 +168,20 @@ export default function EmergencyDispatchModal({
     setEditName(demo.name);
     setEditPhone(demo.phone);
     setEditRel(demo.relationship);
-    if (userId) {
-      saveCaregiverInfo(userId, demo);
-      if (onCaregiverUpdated) onCaregiverUpdated(demo);
+    const activeUserId = userId || (() => {
+      try { return JSON.parse(localStorage.getItem("tiva_auth") || "{}")?.userId; } catch { return null; }
+    })();
+    if (activeUserId) {
+      saveCaregiverInfo(activeUserId, demo);
     }
+    if (onCaregiverUpdated) onCaregiverUpdated(demo);
     setIsEditing(false);
     setDialNotice({
       type: "success",
       text: "Demo caregiver contact (+91 98765 43210) loaded. Click 'Dial Caregiver Now' below to call!",
     });
+    try { window.dispatchEvent(new Event("tiva-data-updated")); } catch { /* ignore */ }
+    try { window.dispatchEvent(new Event("tiva-alert-updated")); } catch { /* ignore */ }
   };
 
   // Primary Call Action Handler

@@ -224,7 +224,13 @@ function DashboardContent({ userName, profile, onNavigate, userId }) {
       setCtx(getConnectedContext());
       if (userId) {
         const cg = getCaregiverInfo(userId);
-        setCaregiver(cg);
+        setCaregiver((prev) => {
+          if (!prev && !cg) return prev;
+          if (prev && cg && prev.name === cg.name && prev.phone === cg.phone && prev.relationship === cg.relationship) {
+            return prev;
+          }
+          return cg;
+        });
 
         const auto = autoPredictFromStoredData(userId, { autoSave: true });
         setAutoPrediction(auto ? auto.prediction : null);
@@ -412,13 +418,13 @@ function DashboardContent({ userName, profile, onNavigate, userId }) {
 
       {/* ── INTERACTIVE PROFESSIONAL CONTINUOUS GLUCOSE MONITOR (CGM) GRAPH ── */}
       <DashboardCgmGraph
-        currentGlucose={latestGlucose?.currentGlucose}
-        currentTrend={latestGlucose?.trend}
+        currentGlucose={latestGlucose?.currentGlucose || latestGlucose?.value || profile?.currentGlucose || 110}
+        currentTrend={latestGlucose?.trend || "stable"}
       />
 
       {/* ── CLINICAL HEALTH RISK & MULTI-METRIC ANALYTICS SUITE ── */}
       <DashboardAnalyticsHub
-        currentGlucose={latestGlucose?.currentGlucose || 110}
+        currentGlucose={latestGlucose?.currentGlucose || latestGlucose?.value || profile?.currentGlucose || 110}
         currentTrend={latestGlucose?.trend || "stable"}
         activeInsulin={latestInsulin?.amount || 1.2}
         carbsLogged={mealTotals.carbs || 45}
@@ -711,7 +717,7 @@ function DashboardContent({ userName, profile, onNavigate, userId }) {
 
             <div className="flex items-baseline gap-2">
               <span className="font-display text-3xl font-bold text-brand-ink">
-                {latestGlucose ? latestGlucose.currentGlucose : "—"}
+                {latestGlucose ? (latestGlucose.currentGlucose ?? latestGlucose.value) : (profile?.currentGlucose || "—")}
               </span>
               <span className="text-xs font-semibold text-slate-400">mg/dL</span>
 
@@ -1054,7 +1060,13 @@ export default function App() {
     const refresh = () => {
       setUnackAlerts(getUnacknowledgedAlertCount(userId));
       const cg = getCaregiverInfo(userId);
-      setGlobalCaregiver(cg);
+      setGlobalCaregiver((prev) => {
+        if (!prev && !cg) return prev;
+        if (prev && cg && prev.name === cg.name && prev.phone === cg.phone && prev.relationship === cg.relationship) {
+          return prev;
+        }
+        return cg;
+      });
     };
     refresh();
 
@@ -1443,18 +1455,18 @@ export default function App() {
                     onBack={() => navigate("dashboard")}
                   />
                 )}
-                {currentView === "food-ai" && <FoodAIPage onBack={() => navigate("dashboard")} />}
+                {currentView === "food-ai" && <FoodAIPage onBack={() => navigate("dashboard")} userId={userId} />}
                 {currentView === "glucose-pred" && (
                   <GlucosePredictionPage onBack={() => navigate("dashboard")} userId={userId} />
                 )}
                 {currentView === "insulin-calc" && (
-                  <InsulinCalculatorPage onBack={() => navigate("dashboard")} />
+                  <InsulinCalculatorPage onBack={() => navigate("dashboard")} userId={userId} />
                 )}
                 {currentView === "diet-planner" && (
-                  <DietPlannerPage onBack={() => navigate("dashboard")} />
+                  <DietPlannerPage onBack={() => navigate("dashboard")} userId={userId} />
                 )}
                 {currentView === "exercise-planner" && (
-                  <ExercisePlannerPage onBack={() => navigate("dashboard")} />
+                  <ExercisePlannerPage onBack={() => navigate("dashboard")} userId={userId} />
                 )}
                 {currentView === "daily-report" && (
                   <DailyReportPage

@@ -504,39 +504,39 @@ export default function DailyReportPage({ onBack, userId, profile, userName: pro
             <h2 className="text-[11px] font-black uppercase tracking-wider text-brand-blue mb-1.5">
               1. PATIENT INFORMATION
             </h2>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-[10px] leading-tight">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-3 text-[11px] leading-normal">
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Patient Name</span>
-                <span className="font-bold text-slate-900 text-xs block truncate">{patientName}</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Patient Name</span>
+                <span className="font-bold text-slate-950 text-sm block leading-snug break-words">{patientName}</span>
               </div>
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Patient ID / Profile</span>
-                <span className="font-mono font-bold text-slate-700 text-xs block truncate">{effectiveUserId}</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Patient ID / Profile</span>
+                <span className="font-mono font-bold text-slate-700 text-xs block leading-snug break-all">{effectiveUserId}</span>
               </div>
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Age / Gender</span>
-                <span className="font-bold text-slate-800 block">{patientMetrics.age} / {patientMetrics.gender}</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Age / Gender</span>
+                <span className="font-bold text-slate-800 text-xs block leading-snug">{patientMetrics.age} / {patientMetrics.gender}</span>
               </div>
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Diabetes Type</span>
-                <span className="font-bold text-slate-800 block truncate">{patientMetrics.diabetesType}</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Diabetes Type</span>
+                <span className="font-bold text-slate-800 text-xs block leading-snug break-words">{patientMetrics.diabetesType}</span>
               </div>
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Weight / BMI</span>
-                <span className="font-bold text-slate-800 block">{patientMetrics.weight} ({patientMetrics.bmi})</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Weight / BMI</span>
+                <span className="font-bold text-slate-800 text-xs block leading-snug">{patientMetrics.weight} ({patientMetrics.bmi})</span>
               </div>
 
-              <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Treatment Modality</span>
-                <span className="font-bold text-slate-800 block truncate">{patientMetrics.treatment}</span>
+              <div className="sm:col-span-2">
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Treatment Modality</span>
+                <span className="font-bold text-slate-800 text-xs block leading-snug break-words">{patientMetrics.treatment}</span>
               </div>
               <div>
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Clinical Target</span>
-                <span className="font-bold text-emerald-700 block">{targetMin} – {targetMax} mg/dL</span>
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Clinical Target</span>
+                <span className="font-bold text-emerald-700 text-xs block leading-snug">{targetMin} – {targetMax} mg/dL</span>
               </div>
-              <div className="col-span-2 sm:col-span-3">
-                <span className="font-bold uppercase text-slate-400 block text-[9px]">Caregiver Emergency Contact</span>
-                <span className="font-bold text-slate-800 block truncate">{patientMetrics.caregiverContact}</span>
+              <div className="col-span-2 sm:col-span-2">
+                <span className="font-bold uppercase text-slate-400 block text-[9px] mb-0.5 tracking-wider">Caregiver Emergency Contact</span>
+                <span className="font-bold text-slate-800 text-xs block leading-snug break-words">{patientMetrics.caregiverContact}</span>
               </div>
             </div>
           </div>

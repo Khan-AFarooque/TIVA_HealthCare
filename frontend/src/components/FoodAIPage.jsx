@@ -52,12 +52,12 @@ function createThumbnail(imageSource) {
   });
 }
 
-export default function FoodAIPage({ onBack }) {
+export default function FoodAIPage({ onBack, userId }) {
   const [image, setImage] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const { history, addToHistory, clearHistory } = useHistory();
+  const { history, addToHistory, clearHistory } = useHistory(userId);
 
   const handleImage = useCallback((file) => {
     setImage(file);

@@ -81,7 +81,13 @@ export function getMealTotals(meals) {
 
 /* ── Food AI (hypoguard_history) ── */
 export function getFoodAIEntries() {
-  return safeReadArray("hypoguard_history");
+  const userId = getUserId();
+  if (userId) {
+    return safeReadArray(`hypoguard_history_${userId}`).filter(
+      (item) => item && !String(item.id || "").startsWith("seed-")
+    );
+  }
+  return [];
 }
 
 /* ── Activity Plans (tiva_activity_plan) ── */
@@ -108,7 +114,7 @@ export function aggregateReportData(date) {
   const mealGroups = groupMealsByCategory(meals);
 
   const foodAIEntries = getFoodAIForDate(date);
-  const allFoodAI = safeReadArray("hypoguard_history");
+  const allFoodAI = getFoodAIEntries();
   const foodAI = { total: allFoodAI.length, filtered: foodAIEntries };
   const glucoseData = getGlucoseForDate(date);
   const insulinData = getInsulinForDate(date);

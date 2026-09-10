@@ -1,17 +1,18 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { User, Activity, Heart, ArrowRight, SkipForward } from "lucide-react";
+import { saveGlucosePrediction } from "../utils/glucosePrediction";
 
 export default function OnboardingPage({ onComplete, onSkip, userId }) {
   const [formData, setFormData] = useState({
     fullName: "",
-    age: "28",
+    age: "",
     gender: "Male",
-    height: "170",
-    currentWeight: "68",
-    currentGlucose: "110",
-    targetGlucose: "100",
-    carbGoal: "200",
+    height: "",
+    currentWeight: "",
+    currentGlucose: "",
+    targetGlucose: "",
+    carbGoal: "",
   });
 
   const handleChange = (e) => {
@@ -26,6 +27,9 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
     (e) => {
       if (e) e.preventDefault();
 
+      const enteredGlucose = Number(formData.currentGlucose) || 110;
+      const targetG = Number(formData.targetGlucose) || 100;
+
       const completeProfile = {
         fullName: formData.fullName.trim() || "User",
         age: formData.age || "28",
@@ -33,8 +37,8 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
         height: formData.height || "170",
         currentWeight: formData.currentWeight || "68",
         targetWeight: formData.currentWeight || "68",
-        currentGlucose: formData.currentGlucose || "110",
-        targetGlucose: formData.targetGlucose || "100",
+        currentGlucose: String(enteredGlucose),
+        targetGlucose: String(targetG),
         lowThreshold: "70",
         highThreshold: "180",
         insulinType: "Rapid-acting",
@@ -63,6 +67,18 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
         } catch { /* ignore */ }
       }
       localStorage.removeItem("tiva_profile");
+
+      // Synchronize entered glucose immediately into glucose prediction history
+      saveGlucosePrediction({
+        currentGlucose: enteredGlucose,
+        predictedGlucose: enteredGlucose,
+        pred_30min: enteredGlucose,
+        pred_60min: enteredGlucose,
+        trend: "stable",
+        source: "onboarding",
+      });
+      try { window.dispatchEvent(new Event("tiva-data-updated")); } catch { /* ignore */ }
+
       onComplete(completeProfile);
     },
     [formData, userId, onComplete]
@@ -101,6 +117,17 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
         localStorage.setItem("tiva_profiles", JSON.stringify(profiles));
       } catch { /* ignore */ }
     }
+
+    saveGlucosePrediction({
+      currentGlucose: 110,
+      predictedGlucose: 110,
+      pred_30min: 110,
+      pred_60min: 110,
+      trend: "stable",
+      source: "onboarding_skip",
+    });
+    try { window.dispatchEvent(new Event("tiva-data-updated")); } catch { /* ignore */ }
+
     if (onSkip) {
       onSkip();
     } else {
@@ -158,6 +185,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="age"
                 min="5"
                 max="100"
+                placeholder="e.g. 28"
                 value={formData.age}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"
@@ -192,6 +220,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="height"
                 min="50"
                 max="250"
+                placeholder="e.g. 170"
                 value={formData.height}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"
@@ -209,6 +238,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="currentWeight"
                 min="20"
                 max="250"
+                placeholder="e.g. 68"
                 value={formData.currentWeight}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"
@@ -226,6 +256,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="currentGlucose"
                 min="40"
                 max="500"
+                placeholder="e.g. 110"
                 value={formData.currentGlucose}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"
@@ -242,6 +273,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="targetGlucose"
                 min="70"
                 max="180"
+                placeholder="e.g. 100"
                 value={formData.targetGlucose}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"
@@ -258,6 +290,7 @@ export default function OnboardingPage({ onComplete, onSkip, userId }) {
                 name="carbGoal"
                 min="50"
                 max="500"
+                placeholder="e.g. 200"
                 value={formData.carbGoal}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-colors"

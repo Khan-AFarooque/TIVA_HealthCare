@@ -43,11 +43,12 @@ export default function ProfilePage({ profile, onUpdateProfile, userId, onBack }
   });
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   // Sync with existing profile and caregiver on load
   useEffect(() => {
-    const cg = userId ? getCaregiverInfo(userId) : null;
-    if (profile) {
+    if (!initialized && profile) {
+      const cg = userId ? getCaregiverInfo(userId) : null;
       setFormData({
         fullName: profile.fullName || "",
         age: profile.age || "28",
@@ -71,8 +72,9 @@ export default function ProfilePage({ profile, onUpdateProfile, userId, onBack }
         caregiverPhone: cg?.phone || profile.caregiver?.phone || "",
         caregiverRel: cg?.relationship || profile.caregiver?.relationship || "Emergency Contact",
       });
+      setInitialized(true);
     }
-  }, [profile, userId]);
+  }, [profile, userId, initialized]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

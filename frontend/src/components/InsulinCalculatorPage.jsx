@@ -51,14 +51,39 @@ export default function InsulinCalculatorPage({ onBack }) {
   // ── History ──
   const [history, setHistory] = useState([]);
 
-  // Load data on mount
+  // Load data & profile clinical parameters on mount
   useEffect(() => {
     setHistory(loadInsulinHistory());
     const g = getLatestGlucose();
-    if (g) setLatestGlucose(g);
+    if (g) {
+      setLatestGlucose(g);
+      setEduGlucose(String(g.value));
+      setUseLatestGlucose(true);
+    }
     const fc = getLatestFoodCarbs();
     if (fc) setLatestFoodCarbs(fc);
-  }, []);
+
+    try {
+      const auth = JSON.parse(localStorage.getItem("tiva_auth") || "{}");
+      const uid = userId || auth?.userId;
+      const profiles = JSON.parse(localStorage.getItem("tiva_profiles") || "{}");
+      const prof = (uid && profiles[uid]) || null;
+      if (prof) {
+        if (prof.targetGlucose) setTargetGlucose(String(prof.targetGlucose));
+        if (prof.isf) setCorrectionFactor(String(prof.isf));
+        if (prof.icr) {
+          const parsedIcr = String(prof.icr).replace("1:", "").trim();
+          if (parsedIcr) setCarbRatio(parsedIcr);
+        }
+        if (!g && prof.currentGlucose) {
+          setEduGlucose(String(prof.currentGlucose));
+          setUseLatestGlucose(true);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [userId]);
 
   // Sync glucose when toggling
   useEffect(() => {
@@ -108,7 +133,9 @@ export default function InsulinCalculatorPage({ onBack }) {
     targetGlucose: targetGlucose ? Number(targetGlucose) : null,
   });
 
-  const hasPersonalSettings = carbRatio && Number(carbRatio) > 0;
+  const hasPersonalSettings =
+    (carbRatio && Number(carbRatio) > 0) ||
+    (correctionFactor && Number(correctionFactor) > 0 && eduGlucose);
 
   return (
     <div className="space-y-6">

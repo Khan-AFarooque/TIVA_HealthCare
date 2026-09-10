@@ -28,6 +28,7 @@ import {
   getTodayString,
   calculateDailyActivityTotals,
   getLatestGlucoseContext,
+  getExerciseSafetyPrescription,
 } from "../utils/exercisePlanner";
 
 function ProgressBar({ value, max, color = "bg-brand-blue" }) {
@@ -43,7 +44,7 @@ function ProgressBar({ value, max, color = "bg-brand-blue" }) {
 const TREND_ICONS = { rising: TrendingUp, stable: Minus, falling: TrendingDown };
 const TREND_COLORS = { rising: "text-orange-500", stable: "text-emerald-600", falling: "text-blue-500" };
 
-export default function ExercisePlannerPage({ onBack }) {
+export default function ExercisePlannerPage({ onBack, userId }) {
   const today = getTodayString();
 
   // Data
@@ -74,18 +75,37 @@ export default function ExercisePlannerPage({ onBack }) {
   // Goal form
   const [showGoalForm, setShowGoalForm] = useState(false);
 
-  // Load data on mount
+  // Load data on mount and listen for glucose updates
   useEffect(() => {
-    setHistory(loadActivityHistory());
-    setPlan(loadActivityPlan());
-    setGoals(loadActivityGoals());
-    setGlucoseCtx(getLatestGlucoseContext());
+    const refresh = () => {
+      setHistory(loadActivityHistory());
+      setPlan(loadActivityPlan());
+      setGoals(loadActivityGoals());
+      setGlucoseCtx(getLatestGlucoseContext());
+    };
+    refresh();
+    window.addEventListener("tiva-data-updated", refresh);
+    return () => window.removeEventListener("tiva-data-updated", refresh);
   }, []);
 
   const daily = calculateDailyActivityTotals(history, today);
   const hasGoal = goals.dailyActiveMinutes != null && goals.dailyActiveMinutes !== "" && Number(goals.dailyActiveMinutes) > 0;
 
   // ── Handlers ──
+  const handleAdoptPrescription = useCallback((recommendedActivity) => {
+    if (!recommendedActivity) return;
+    const now = new Date();
+    const entry = {
+      activityName: recommendedActivity.name,
+      duration: recommendedActivity.duration,
+      intensity: recommendedActivity.intensity,
+      date: today,
+      time: now.toTimeString().slice(0, 5),
+    };
+    const updated = savePlannedActivity(entry);
+    setPlan(updated);
+  }, [today]);
+
   const handleSaveLog = useCallback(() => {
     const duration = Number(logDuration);
     if (!duration || duration <= 0) return;
@@ -482,36 +502,93 @@ export default function ExercisePlannerPage({ onBack }) {
           </div>
         </div>
 
-        {/* ── Right: Glucose Context Panel ── */}
+        {/* ── Right: Glucose-Adaptive Dynamic Exercise Prescription ── */}
         <div className="lg:sticky lg:top-24 space-y-4">
-          <div className="glass-strong p-5 rounded-3xl">
-            <h3 className="font-display text-base font-bold text-brand-ink mb-4 flex items-center gap-2">
-              <Activity className="h-4 w-4 text-brand-blue" /> Glucose Context
-            </h3>
-            {glucoseCtx ? (
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-white/60 border border-slate-200/60">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Latest Glucose</p>
-                  <p className="font-display text-lg font-bold text-brand-ink">{glucoseCtx.glucose} <span className="text-sm font-medium text-slate-400">mg/dL</span></p>
+          {(() => {
+            const rx = getExerciseSafetyPrescription(glucoseCtx?.glucose, glucoseCtx?.trend);
+            return (
+              <div className="glass-strong p-6 rounded-3xl border border-white/70 shadow-lg space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h3 className="font-display text-base font-bold text-brand-ink flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-brand-blue" />
+                    Glycemic Exercise Advisor
+                  </h3>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${rx.badgeBg}`}>
+                    {rx.badgeText}
+                  </span>
                 </div>
-                <div className="p-3 rounded-xl bg-white/60 border border-slate-200/60">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Predicted Trend</p>
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const Icon = TREND_ICONS[glucoseCtx.trend] || Minus;
-                      const color = TREND_COLORS[glucoseCtx.trend] || "text-slate-500";
-                      return <><Icon className={`h-5 w-5 ${color}`} /><span className={`font-display text-lg font-bold ${color}`}>{glucoseCtx.trend || "Unknown"}</span></>;
-                    })()}
+
+                {/* Vitals Summary Strip */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-2xl bg-white border border-slate-200/70 shadow-xs">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Current Glucose</span>
+                    <span className="font-display text-xl font-bold text-brand-ink">
+                      {glucoseCtx?.glucose || 110} <span className="text-xs font-normal text-slate-400">mg/dL</span>
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-white border border-slate-200/70 shadow-xs">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Forecast Trend</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {(() => {
+                        const Icon = TREND_ICONS[glucoseCtx?.trend] || Minus;
+                        const color = TREND_COLORS[glucoseCtx?.trend] || "text-emerald-600";
+                        return (
+                          <>
+                            <Icon className={`h-4 w-4 ${color}`} />
+                            <span className={`font-bold text-xs ${color} capitalize`}>{glucoseCtx?.trend || "Stable"}</span>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Recent glucose information is shown for personal tracking context.
-                </p>
+
+                {/* Clinical Status Title & Advice */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <h4 className="font-bold text-xs text-brand-ink">
+                    {rx.statusTitle}
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {rx.advice}
+                  </p>
+                  <p className="text-[11px] text-blue-700 font-medium pt-1 border-t border-slate-200">
+                    💧 <strong>Hydration:</strong> {rx.hydrationAdvice}
+                  </p>
+                </div>
+
+                {/* 1-Click Adopt AI Prescribed Exercise Button */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleAdoptPrescription(rx.recommendedActivity)}
+                    className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-blue to-teal-600 hover:brightness-110 text-white font-bold text-xs shadow-md shadow-brand-blue/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    ⚡ Adopt Prescribed Exercise ({rx.recommendedActivity.name})
+                  </button>
+                  <p className="text-[10px] text-center text-slate-400 mt-1.5">
+                    Automatically schedules {rx.recommendedActivity.duration} min ({rx.recommendedActivity.intensity}) tailored to your glucose.
+                  </p>
+                </div>
+
+                {/* Safe Allowed Modalities */}
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                    Clinically Safe Activities for this Window
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rx.allowedTypes.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2.5 py-1 rounded-xl bg-white border border-slate-200 text-[11px] font-semibold text-slate-700"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="text-sm text-slate-400 text-center py-6">No recent glucose data available</p>
-            )}
-          </div>
+            );
+          })()}
         </div>
       </div>
     </div>

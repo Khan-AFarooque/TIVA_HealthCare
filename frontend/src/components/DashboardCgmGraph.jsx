@@ -66,9 +66,21 @@ export default function DashboardCgmGraph({ currentGlucose, currentTrend }) {
     const activeData = PRESETS[activePreset];
     const rawReadings = [...activeData.readings];
 
-    // If current user glucose exists, update the last historical point
+    // If current user glucose exists, smoothly anchor the stable trace to currentGlucose
+    let pred30Val = activeData.pred30;
+    let pred60Val = activeData.pred60;
+
     if (currentGlucose && activePreset === "stable") {
-      rawReadings[23] = currentGlucose;
+      const numG = Number(currentGlucose);
+      if (!isNaN(numG) && numG > 0) {
+        const delta = numG - 120;
+        for (let i = 0; i < 24; i++) {
+          rawReadings[i] = Math.round(rawReadings[i] + delta * (i / 23));
+        }
+        rawReadings[23] = numG;
+        pred30Val = Math.round(activeData.pred30 + delta);
+        pred60Val = Math.round(activeData.pred60 + delta);
+      }
     }
 
     const points = [];
@@ -104,10 +116,10 @@ export default function DashboardCgmGraph({ currentGlucose, currentTrend }) {
       slotIndex: 24,
       time: time30,
       timeLabel: "+30m (" + time30.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ")",
-      value: activeData.pred30,
+      value: pred30Val,
       isForecast: true,
       forecastTag: "+30m",
-      status: activeData.pred30 < 70 ? "Hypo Danger" : "Projected",
+      status: pred30Val < 70 ? "Hypo Danger" : "Projected",
     });
 
     // +60m forecast point (slot 25)
@@ -116,10 +128,10 @@ export default function DashboardCgmGraph({ currentGlucose, currentTrend }) {
       slotIndex: 25,
       time: time60,
       timeLabel: "+60m (" + time60.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ")",
-      value: activeData.pred60,
+      value: pred60Val,
       isForecast: true,
       forecastTag: "+60m",
-      status: activeData.pred60 < 70 ? "Hypo Danger" : "Projected",
+      status: pred60Val < 70 ? "Hypo Danger" : "Projected",
     });
 
     return points;

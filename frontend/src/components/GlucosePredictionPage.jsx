@@ -41,6 +41,7 @@ import { evaluateAndCreateAlert } from "../utils/alertManager";
 import { parseCgmCsv, DEMO_CGM_TRACES } from "../utils/cgmParser";
 import { saveInsulinLog } from "../utils/insulinCalculator";
 import { saveMealEntry } from "../utils/dietPlanner";
+import { getLatestGlucoseReading, getLatestFoodCarbs } from "../utils/shared";
 
 // Default 24 continuous glucose readings (past 2 hours, 5-min intervals)
 const DEFAULT_READINGS = [
@@ -465,11 +466,6 @@ export default function GlucosePredictionPage({ onBack, userId }) {
   const [applySuccess, setApplySuccess] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Load history on mount
-  useEffect(() => {
-    setHistory(loadGlucoseHistory());
-  }, []);
-
   // Run Forecast Calculation using API with calibrated fallback
   const handleRunPrediction = useCallback(
     async (overrideReadings, overrideCarbs) => {
@@ -593,6 +589,48 @@ export default function GlucosePredictionPage({ onBack, userId }) {
     },
     [readings, carbs, activeInsulin, targetGlucose, isf, icr]
   );
+
+  // Calibrate 24-point CGM sequence & clinical parameters to active user profile on mount
+  useEffect(() => {
+    setHistory(loadGlucoseHistory());
+
+    try {
+      const auth = JSON.parse(localStorage.getItem("tiva_auth") || "{}");
+      const uid = userId || auth?.userId;
+      const profiles = JSON.parse(localStorage.getItem("tiva_profiles") || "{}");
+      const prof = (uid && profiles[uid]) || null;
+      const latest = getLatestGlucoseReading();
+
+      const userGlucose = Number(prof?.currentGlucose ?? latest?.currentGlucose ?? latest?.value);
+      let activeSeq = DEFAULT_READINGS;
+
+      if (userGlucose && userGlucose > 0) {
+        const baseLast = DEFAULT_READINGS[DEFAULT_READINGS.length - 1]; // 187
+        const offset = userGlucose - baseLast;
+        activeSeq = DEFAULT_READINGS.map((v, i) => {
+          const weight = (i + 1) / DEFAULT_READINGS.length;
+          return Math.max(40, Math.min(450, Math.round(v + offset * weight)));
+        });
+        setReadings(activeSeq);
+      }
+
+      if (prof?.targetGlucose) setTargetGlucose(Number(prof.targetGlucose));
+      if (prof?.isf) setIsf(Number(prof.isf));
+      if (prof?.icr) {
+        const parsedIcr = Number(String(prof.icr).replace("1:", "").trim());
+        if (parsedIcr > 0) setIcr(parsedIcr);
+      }
+
+      const recentFood = getLatestFoodCarbs(uid);
+      const foodCarbs = recentFood?.carbsGrams ? Number(recentFood.carbsGrams) : 0;
+      if (foodCarbs > 0) setCarbs(foodCarbs);
+
+      // Auto-run forecast prediction based on user's calibrated inputs
+      handleRunPrediction(activeSeq, foodCarbs);
+    } catch {
+      handleRunPrediction(DEFAULT_READINGS, 0);
+    }
+  }, [userId, handleRunPrediction]);
 
   // ── Workable Insulin & Rescue Carb Handlers ──
   const [insulinLoggedMsg, setInsulinLoggedMsg] = useState("");

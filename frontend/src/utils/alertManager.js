@@ -340,6 +340,8 @@ export function saveCaregiverInfo(userId, caregiver) {
       relationship: caregiver.relationship || "",
     };
     localStorage.setItem("tiva_profiles", JSON.stringify(profiles));
+    try { window.dispatchEvent(new Event("tiva-data-updated")); } catch { /* ignore */ }
+    try { window.dispatchEvent(new Event("tiva-alert-updated")); } catch { /* ignore */ }
   } catch { /* ignore */ }
 }
 

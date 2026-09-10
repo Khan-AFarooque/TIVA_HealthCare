@@ -35,11 +35,26 @@ function safeReadArray(key) {
 /* ── Cross-Module Data Connectors ── */
 
 /**
- * Get the latest Food AI carbohydrate entry from hypoguard_history.
+ * Get the latest Food AI carbohydrate entry from the user's isolated history.
  * Used by: Glucose Prediction, Insulin Calculator, Diet Planner
  */
-export function getLatestFoodCarbs() {
-  const arr = safeReadArray("hypoguard_history");
+function getActiveFoodAIHistory(targetUserId) {
+  try {
+    const auth = safeRead("tiva_auth");
+    const uid = targetUserId || auth?.userId;
+    if (uid) {
+      const userKey = `hypoguard_history_${uid}`;
+      const arr = safeReadArray(userKey);
+      return arr.filter((item) => item && !String(item.id || "").startsWith("seed-"));
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+export function getLatestFoodCarbs(targetUserId) {
+  const arr = getActiveFoodAIHistory(targetUserId);
   for (const entry of arr) {
     const carbs = entry.consumed_carbs_g ?? entry.carbs_g;
     if (carbs !== undefined && carbs !== null) {
@@ -57,31 +72,23 @@ export function getLatestFoodCarbs() {
   return null;
 }
 
-/**
- * Get recent Food AI entries (up to 10).
- * Used by: Diet Planner, Glucose Prediction context panel
- */
-export function getRecentFoodAIEntries() {
-  const arr = safeReadArray("hypoguard_history");
+export function getRecentFoodAIEntries(targetUserId) {
+  const arr = getActiveFoodAIHistory(targetUserId);
   return arr.slice(0, 10).map((entry) => ({
     id: entry.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     foodName: entry.food_name || "Unknown Food",
-    carbs: entry.carbs_g != null ? Number(entry.carbs_g) : null,
-    protein: entry.protein_g != null ? Number(entry.protein_g) : null,
-    calories: entry.calories_kcal != null ? Number(entry.calories_kcal) : null,
-    fat: entry.fat_g != null ? Number(entry.fat_g) : null,
+    carbs: entry.consumed_carbs_g ?? (entry.carbs_g != null ? Number(entry.carbs_g) : null),
+    protein: entry.consumed_protein_g ?? (entry.protein_g != null ? Number(entry.protein_g) : null),
+    calories: entry.consumed_calories_kcal ?? (entry.calories_kcal != null ? Number(entry.calories_kcal) : null),
+    fat: entry.consumed_fat_g ?? (entry.fat_g != null ? Number(entry.fat_g) : null),
     category: entry.category || "",
     servingSize: entry.serving_size || "",
     createdAt: entry.createdAt || null,
   }));
 }
 
-/**
- * Get Food AI entries for a specific date.
- * Used by: Daily Report
- */
 export function getFoodAIForDate(date) {
-  const all = safeReadArray("hypoguard_history");
+  const all = getActiveFoodAIHistory();
   return all.filter((e) => {
     if (e.date === date) return true;
     if (e.createdAt && e.createdAt.slice(0, 10) === date) return true;
@@ -95,14 +102,36 @@ export function getFoodAIForDate(date) {
  */
 export function getLatestGlucoseReading() {
   const arr = safeReadArray("tiva_glucose_history");
-  if (arr.length === 0) return null;
-  const latest = arr[0];
-  return {
-    value: latest.currentGlucose,
-    trend: latest.trend,
-    predicted: latest.predictedGlucose,
-    savedAt: latest.savedAt || null,
-  };
+  if (arr.length > 0) {
+    const latest = arr[0];
+    const val = Number(latest.currentGlucose ?? latest.value) || 110;
+    return {
+      value: val,
+      currentGlucose: val,
+      trend: latest.trend || "stable",
+      predicted: latest.predictedGlucose ?? val,
+      savedAt: latest.savedAt || null,
+    };
+  }
+
+  // Fallback to active profile if history is empty
+  try {
+    const auth = safeRead("tiva_auth");
+    const profiles = safeRead("tiva_profiles") || {};
+    const p = (auth?.userId && profiles[auth.userId]) || Object.values(profiles)[0];
+    if (p?.currentGlucose) {
+      const val = Number(p.currentGlucose) || 110;
+      return {
+        value: val,
+        currentGlucose: val,
+        trend: "stable",
+        predicted: val,
+        savedAt: null,
+      };
+    }
+  } catch { /* ignore */ }
+
+  return null;
 }
 
 /**

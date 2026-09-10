@@ -67,23 +67,34 @@ export function getLatestInsulinLog() {
  * @returns {object|null} Calculation result or null if settings incomplete
  */
 export function educationalCalculation(params) {
-  const { carbsGrams, currentGlucose, carbRatio, correctionFactor, targetGlucose } = params;
+  const { carbsGrams = 0, currentGlucose, carbRatio, correctionFactor, targetGlucose } = params;
 
-  // All personal settings must be provided by the user
-  if (!carbRatio || carbRatio <= 0) return null;
+  const effCarbRatio = carbRatio && Number(carbRatio) > 0 ? Number(carbRatio) : null;
+  const effCorrectionFactor =
+    correctionFactor && Number(correctionFactor) > 0 ? Number(correctionFactor) : null;
+  const effTarget =
+    targetGlucose != null && Number(targetGlucose) > 0 ? Number(targetGlucose) : 100;
+  const effGlucose = currentGlucose != null ? Number(currentGlucose) : null;
+
+  // Need at least one clinical parameter to perform educational estimation
+  if (!effCarbRatio && !effCorrectionFactor) return null;
 
   // Carb component
-  const carbComponent = carbsGrams / carbRatio;
+  let carbComponent = 0;
+  if (effCarbRatio && effCarbRatio > 0 && Number(carbsGrams) > 0) {
+    carbComponent = Number(carbsGrams) / effCarbRatio;
+  }
 
-  // Correction component (only if all three are provided)
+  // Correction component (only if correction factor and current glucose are available)
   let correctionComponent = 0;
   let hasCorrection = false;
-  if (correctionFactor && correctionFactor > 0 && targetGlucose != null && currentGlucose != null) {
-    correctionComponent = (currentGlucose - targetGlucose) / correctionFactor;
+  if (effCorrectionFactor && effCorrectionFactor > 0 && effGlucose != null) {
+    correctionComponent = (effGlucose - effTarget) / effCorrectionFactor;
     hasCorrection = true;
   }
 
-  const totalEstimate = carbComponent + correctionComponent;
+  const rawTotal = carbComponent + correctionComponent;
+  const totalEstimate = Math.max(0, rawTotal);
 
   return {
     carbComponent: Math.round(carbComponent * 100) / 100,

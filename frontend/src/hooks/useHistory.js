@@ -1,107 +1,105 @@
 import { useState, useEffect, useCallback } from "react";
 
 const STORAGE_KEY = "hypoguard_history";
-const MAX_ENTRIES = 20;
-
-const SEED_HISTORY = [
-  {
-    id: "seed-1",
-    food_name: "Aloo Gobi",
-    confidence: 0.90,
-    carbs_g: 9.0,
-    calories_kcal: 85,
-    protein_g: 2.0,
-    fat_g: 4.5,
-    category: "Sabzi",
-    serving_size: "1 serving (100g)",
-    weight_g: 100,
-    recommendation: "Cauliflower is great; potato raises carbs. Pair with more sabzi than rice.",
-    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    hasNutrition: true,
-  },
-  {
-    id: "seed-2",
-    food_name: "Dal Makhani",
-    confidence: 0.88,
-    carbs_g: 17.0,
-    calories_kcal: 180,
-    protein_g: 6.5,
-    fat_g: 8.0,
-    category: "Lentils",
-    serving_size: "1 bowl (150g)",
-    weight_g: 150,
-    recommendation: "High fiber and steady protein. Excellent choice for sustained blood sugar stability.",
-    createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-    hasNutrition: true,
-  },
-];
+const MAX_ENTRIES = 30;
 
 /**
- * Store prediction history in localStorage and expose helpers.
+ * Store food scan history in localStorage isolated per user.
  * Each entry: { id, food_name, confidence, carbs_g, calories_kcal, protein_g,
- *               fat_g, category, serving_size, recommendation, image, createdAt }
+ *               fat_g, category, serving_size, weight_g, recommendation, image, createdAt }
  */
-export function useHistory() {
+export function useHistory(userId) {
+  const activeUserId = userId || (() => {
+    try {
+      return JSON.parse(localStorage.getItem("tiva_auth") || "{}")?.userId || null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const storageKey = activeUserId ? `hypoguard_history_${activeUserId}` : STORAGE_KEY;
   const [history, setHistory] = useState([]);
 
-  useEffect(() => {
+  const loadCurrentHistory = useCallback(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setHistory(parsed);
+        if (Array.isArray(parsed)) {
+          // Strictly exclude any legacy seed demo items
+          const cleaned = parsed.filter(
+            (p) => p && !String(p.id || "").startsWith("seed-")
+          );
+          setHistory(cleaned);
           return;
         }
       }
-      setHistory(SEED_HISTORY);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_HISTORY));
+      setHistory([]);
     } catch {
-      setHistory(SEED_HISTORY);
+      setHistory([]);
     }
-  }, []);
+  }, [storageKey]);
 
-  const addToHistory = useCallback((entry) => {
-    setHistory((prev) => {
-      const filtered = prev.filter(
-        (p) => !(p.food_name === entry.food_name && Date.now() - new Date(p.createdAt).getTime() < 3000)
-      );
-      const next = [
-        {
-          ...entry,
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          createdAt: new Date().toISOString(),
-        },
-        ...filtered,
-      ].slice(0, MAX_ENTRIES);
+  useEffect(() => {
+    loadCurrentHistory();
 
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
+    const handleUpdate = () => loadCurrentHistory();
+    window.addEventListener("tiva-data-updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("tiva-data-updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [loadCurrentHistory]);
+
+  const addToHistory = useCallback(
+    (entry) => {
+      setHistory((prev) => {
+        const filtered = prev.filter(
+          (p) =>
+            p &&
+            !String(p.id || "").startsWith("seed-") &&
+            !(p.food_name === entry.food_name && Date.now() - new Date(p.createdAt || 0).getTime() < 3000)
+        );
+        const next = [
+          {
+            ...entry,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            createdAt: new Date().toISOString(),
+          },
+          ...filtered,
+        ].slice(0, MAX_ENTRIES);
+
         try {
-          const lightweight = next.map((item) => ({ ...item, image: null }));
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweight));
+          localStorage.setItem(storageKey, JSON.stringify(next));
+        } catch {
+          try {
+            const lightweight = next.map((item) => ({ ...item, image: null }));
+            localStorage.setItem(storageKey, JSON.stringify(lightweight));
+          } catch {
+            /* ignore */
+          }
+        }
+        try {
+          window.dispatchEvent(new Event("tiva-data-updated"));
         } catch {
           /* ignore */
         }
-      }
-      try {
-        window.dispatchEvent(new Event("tiva-data-updated"));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+        return next;
+      });
+    },
+    [storageKey]
+  );
 
   const clearHistory = useCallback(() => {
     setHistory([]);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey);
+      window.dispatchEvent(new Event("tiva-data-updated"));
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [storageKey]);
 
   return { history, addToHistory, clearHistory };
 }
