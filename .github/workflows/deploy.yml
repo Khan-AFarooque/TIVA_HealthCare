@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          npm ci
+          npm install --legacy-peer-deps
 
       - name: Build Vite App
         run: |
