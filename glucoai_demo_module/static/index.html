@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Glucose Predictor — Type-1 Diabetes Support System</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon">🩺</span>
+                <div>
+                    <h1>GlucoAI Support Engine</h1>
+                    <p class="subtitle">Continuous Glucose Forecasting & Early Risk Alerts</p>
+                </div>
+            </div>
+            <div class="status-pill">
+                <span class="pulse-dot"></span>
+                <span>FastAPI + Keras LSTM Live</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-grid">
+            <!-- Left Side: Controls & Input -->
+            <section class="card input-card">
+                <div class="card-header">
+                    <h2>🎛️ Input Controls & AI Vision</h2>
+                    <span class="badge-info">LSTM Engine v1.0</span>
+                </div>
+
+                <!-- Feature Tabs -->
+                <div class="input-tabs">
+                    <button class="tab-btn active" id="tab-vision" onclick="switchTab('vision')">📸 AI Vision Scan</button>
+                    <button class="tab-btn" id="tab-readings" onclick="switchTab('readings')">📊 Past 2-Hr CGM (24)</button>
+                    <button class="tab-btn" id="tab-clinical" onclick="switchTab('clinical')">💉 Patient Parameters</button>
+                </div>
+
+                <!-- TAB 1: AI Vision & Image Detection Section -->
+                <div id="section-vision" class="tab-section active">
+                    <div class="vision-box">
+                        <div class="vision-header">
+                            <span class="vision-icon">📷</span>
+                            <div>
+                                <h3>Meal Carbohydrate & Meter OCR Scanner</h3>
+                                <p class="sub-text">Upload meal photo or meter display for instant AI feature extraction</p>
+                            </div>
+                        </div>
+
+                        <!-- Dropzone / Upload Area -->
+                        <div class="dropzone" id="dropzone" onclick="document.getElementById('image-input-file').click()">
+                            <input type="file" id="image-input-file" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
+                            <div class="dropzone-content">
+                                <span class="upload-icon">☁️</span>
+                                <p class="dropzone-title"><strong>Drop Meal Photo or Screen</strong> or click to browse</p>
+                                <span class="dropzone-hint">Supports PNG, JPG, JPEG (Instant AI Carb & OCR Detection)</span>
+                            </div>
+                        </div>
+
+                        <!-- Preset Demo Buttons -->
+                        <div class="vision-presets">
+                            <span class="presets-label">⚡ Demo Scan Presets:</span>
+                            <div class="vision-preset-grid">
+                                <button type="button" class="btn-vision-preset" onclick="runImageDetection('pizza')">
+                                    <span>🍕 Pizza Meal</span>
+                                    <small>~70g Carbs</small>
+                                </button>
+                                <button type="button" class="btn-vision-preset" onclick="runImageDetection('salad')">
+                                    <span>🥗 Salad Meal</span>
+                                    <small>~15g Carbs</small>
+                                </button>
+                                <button type="button" class="btn-vision-preset" onclick="runImageDetection('meter')">
+                                    <span>🩸 Meter Screen</span>
+                                    <small>OCR 168 mg/dL</small>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- AI Detection Output Display Modal/Card -->
+                        <div id="detection-result-card" class="detection-card hidden">
+                            <div class="detection-preview-container">
+                                <img id="detection-img-preview" src="" alt="Detection Preview">
+                                <div class="scanner-laser" id="scanner-laser"></div>
+                                <div id="detection-bbox-overlay" class="bbox-overlay"></div>
+                            </div>
+                            <div class="detection-info">
+                                <div class="detection-title-row">
+                                    <h4 id="detection-title">Detecting...</h4>
+                                    <span class="badge-confidence" id="detection-confidence">95% Match</span>
+                                </div>
+                                <div class="detection-stats-grid">
+                                    <div class="stat-item">
+                                        <span class="stat-label">Estimated Carbs</span>
+                                        <span class="stat-value" id="detection-carbs">--</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Detected Type</span>
+                                        <span class="stat-value" id="detection-type">--</span>
+                                    </div>
+                                </div>
+                                <p class="detection-action-msg" id="detection-msg">Analyzing items...</p>
+                                <button type="button" class="btn-apply-detection" id="btn-apply-detection" onclick="applyDetectionResult()">
+                                    ⚡ Apply to Forecast & Run LSTM
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Past 2-Hour CGM Readings -->
+                <div id="section-readings" class="tab-section hidden">
+                    <!-- Preset Quick Buttons -->
+                    <div class="presets-section">
+                        <label>CGM Waveform Presets:</label>
+                        <div class="preset-buttons">
+                            <button type="button" class="btn-preset" onclick="loadPreset('rising_spike')">📈 Rising Spike</button>
+                            <button type="button" class="btn-preset" onclick="loadPreset('hypo_warning')">🚨 Hypo Drop</button>
+                            <button type="button" class="btn-preset" onclick="loadPreset('stable_normal')">✅ Normal Stable</button>
+                        </div>
+                    </div>
+
+                    <form id="glucose-form">
+                        <div class="inputs-grid" id="inputs-container">
+                            <!-- Populated by JS -->
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TAB 3: Clinical Parameters -->
+                <div id="section-clinical" class="tab-section hidden">
+                    <div class="clinical-inputs-section">
+                        <div class="section-title">
+                            <span>💉 Patient Clinical Parameters</span>
+                        </div>
+                        <div class="clinical-grid">
+                            <div class="clinical-group">
+                                <label for="input-carbs">Meal Carbs (g)</label>
+                                <input type="number" id="input-carbs" value="0" min="0" step="5">
+                            </div>
+                            <div class="clinical-group">
+                                <label for="input-iob">Active IOB (Units)</label>
+                                <input type="number" id="input-iob" value="0.0" min="0" step="0.5">
+                            </div>
+                            <div class="clinical-group">
+                                <label for="input-isf">ISF (mg/dL per U)</label>
+                                <input type="number" id="input-isf" value="50" min="10" step="5">
+                            </div>
+                            <div class="clinical-group">
+                                <label for="input-icr">ICR (g per U)</label>
+                                <input type="number" id="input-icr" value="15" min="1" step="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Action Button -->
+                <div class="action-footer">
+                    <button type="button" class="btn-primary" id="btn-predict" onclick="runPrediction()">
+                        <span>🔮 Run 30-min & 60-min Forecast + AI Insulin Advisor</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right Side: Analytics & Chart -->
+            <section class="card analytics-card">
+                <div class="card-header">
+                    <h2>📈 Glucose Trend & Predictive Curve</h2>
+                </div>
+
+                <!-- Live Risk Banner -->
+                <div id="risk-banner" class="risk-banner safe">
+                    <div class="risk-status" id="risk-status">Ready to Forecast</div>
+                    <div class="risk-message" id="risk-message">Click Predict to calculate 30-min and 60-min future glucose predictions.</div>
+                </div>
+
+                <!-- AI Insulin Dosage Guidance Banner -->
+                <div id="insulin-card" class="insulin-card maintain">
+                    <div class="insulin-card-header">
+                        <div class="insulin-action-badge" id="insulin-action-badge">MAINTAIN</div>
+                        <div class="insulin-status-title" id="insulin-status">🟢 Insulin Status Ready</div>
+                    </div>
+                    <div class="insulin-body">
+                        <div class="insulin-bolus-display">
+                            <span class="bolus-label">Suggested Total Bolus</span>
+                            <div class="bolus-value-container">
+                                <span class="bolus-value" id="val-bolus">0.0</span>
+                                <span class="bolus-unit">Units</span>
+                            </div>
+                            <div class="bolus-breakdown">
+                                <span class="badge-pill" id="pill-corr">Corr: 0 U</span>
+                                <span class="badge-pill" id="pill-carb">Carb: 0 U</span>
+                            </div>
+                        </div>
+                        <div class="insulin-message-box" id="insulin-message">
+                            Run prediction to generate personalized AI insulin adjustment recommendations.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <span class="metric-label">Current Glucose</span>
+                        <span class="metric-value" id="val-current">--</span>
+                        <span class="metric-unit">mg/dL</span>
+                    </div>
+                    <div class="metric-box highlight-30">
+                        <span class="metric-label">Predicted (t + 30 min)</span>
+                        <span class="metric-value" id="val-30min">--</span>
+                        <span class="metric-unit">mg/dL</span>
+                    </div>
+                    <div class="metric-box highlight-60">
+                        <span class="metric-label">Predicted (t + 60 min)</span>
+                        <span class="metric-value" id="val-60min">--</span>
+                        <span class="metric-unit">mg/dL</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="metric-label">Trend Velocity</span>
+                        <span class="metric-value" id="val-velocity">--</span>
+                        <span class="metric-unit">mg/dL / 5min</span>
+                    </div>
+                </div>
+
+                <!-- Chart Container -->
+                <div class="chart-container">
+                    <canvas id="cgmChart"></canvas>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

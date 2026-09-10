@@ -1,0 +1,24 @@
+# Dependencies & builds
+node_modules/
+frontend/dist/
+dist/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+
+# Large binary datasets, raw images and archives
+dataset/
+teachable_machine/
+teachable_machine_2/
+*.zip
+*.tar.gz
+
+# Temp storage & IDE artifacts
+.tempmediaStorage/
+.system_generated/
+*.log
+.DS_Store

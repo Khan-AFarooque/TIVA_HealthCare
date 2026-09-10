@@ -1,0 +1,21 @@
+# HypoGuard AI - Backend requirements
+# Python 3.10+ recommended
+
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+
+# --- Machine Learning ---
+tensorflow==2.18.0
+scikit-learn==1.6.0
+
+# --- Image processing ---
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+pandas==2.2.3
+
+# --- Misc ---
+python-dotenv==1.0.1

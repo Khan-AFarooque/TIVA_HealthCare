@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    color: #0b1b3a;
+    background: linear-gradient(135deg, #eef4ff 0%, #ffffff 45%, #ecfdf5 100%);
+    min-height: 100vh;
+  }
+  h1, h2, h3, .font-display {
+    font-family: "Sora", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 32px 0 rgba(16, 38, 135, 0.12);
+  }
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 12px 40px 0 rgba(16, 38, 135, 0.15);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(10, 20, 60, 0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #2563eb, #10b981);
+  border-radius: 8px;
+}
+
+/* AI Vision Scanner Laser Animation */
+@keyframes scanAnimation {
+  0% { top: 0%; }
+  50% { top: 92%; }
+  100% { top: 0%; }
+}
+
+.scanner-laser {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, #a855f7, transparent);
+  box-shadow: 0 0 16px #38bdf8;
+  animation: scanAnimation 2s infinite ease-in-out;
+  z-index: 20;
+}
+
+.bbox-tag {
+  position: absolute;
+  border: 2px dashed #38bdf8;
+  background: rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  padding: 3px 5px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.bbox-tag span {
+  background: #0284c7;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Clinical Welcome Marquee Animation */
+@keyframes clinicalMarquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-clinical-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: clinicalMarquee 38s linear infinite;
+}
+
+.animate-clinical-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ── Print Optimization for TIVA Single-Page A4 Medical Report ── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Suppress all website navigation, sidebar, mobile drawer, action bars, bells, ticker */
+  header,
+  aside,
+  nav,
+  footer,
+  .print\:hidden,
+  .animate-clinical-marquee,
+  button {
+    display: none !important;
+  }
+
+  /* Force the single-page report container to fill the A4 printable area cleanly */
+  #tiva-one-page-report {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+  }
+}
