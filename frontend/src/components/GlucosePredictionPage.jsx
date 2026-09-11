@@ -473,6 +473,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
 
   // Loading & Forecasting States
   const [forecasting, setForecasting] = useState(false);
+  const [runSuccess, setRunSuccess] = useState(false);
   const [predictionData, setPredictionData] = useState(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [history, setHistory] = useState([]);
@@ -529,6 +530,8 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             if (contentType.includes("application/json")) {
               const data = await resp.json();
               setPredictionData(data);
+              setRunSuccess(true);
+              setTimeout(() => setRunSuccess(false), 3000);
               setForecasting(false);
               return;
             }
@@ -537,6 +540,9 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       } catch (err) {
         console.warn("Backend API unavailable, calculating client-side LSTM inference:", err);
       }
+
+      // Smooth realistic inference delay for client-side calculation so user sees spinner
+      await new Promise((resolve) => setTimeout(resolve, 350));
 
       try {
         const effIsf = Number(currentIsf) > 0 ? Number(currentIsf) : 50;
@@ -613,6 +619,8 @@ export default function GlucosePredictionPage({ onBack, userId }) {
           carb_dose: Math.round(carbDose * 100) / 100,
           insulin_message: insulinMessage,
         });
+        setRunSuccess(true);
+        setTimeout(() => setRunSuccess(false), 3000);
       } finally {
         setForecasting(false);
       }
@@ -715,7 +723,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
     window.dispatchEvent(new Event("tiva-data-updated"));
   };
 
-  // Handle Loading Waveform Presets
+  // Handle Loading Waveform Presets (loads preset readings & carbs into inputs)
   const handleLoadWaveform = (key) => {
     setSelectedWaveform(key);
     const preset = PRESETS[key];
@@ -724,7 +732,6 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       const nextCarbs = preset.carbs;
       setReadings(nextReadings);
       setCarbs(nextCarbs);
-      handleRunPrediction(nextReadings, nextCarbs);
     }
   };
 
@@ -735,38 +742,32 @@ export default function GlucosePredictionPage({ onBack, userId }) {
     updated[index] = isNaN(num) ? 120 : num;
     setReadings(updated);
     setSelectedWaveform("custom");
-    handleRunPrediction(updated);
   };
 
-  // Handle Patient Parameter Adjustments with immediate real-time forecast update
+  // Handle Patient Parameter Adjustments
   const handleCarbsChange = (val) => {
     const num = Math.max(0, parseFloat(val) || 0);
     setCarbs(num);
-    handleRunPrediction(undefined, num);
   };
 
   const handleActiveInsulinChange = (val) => {
     const num = Math.max(0, parseFloat(val) || 0);
     setActiveInsulin(num);
-    handleRunPrediction(undefined, undefined, num);
   };
 
   const handleIsfChange = (val) => {
     const num = Math.max(10, parseFloat(val) || 50);
     setIsf(num);
-    handleRunPrediction(undefined, undefined, undefined, undefined, num);
   };
 
   const handleIcrChange = (val) => {
     const num = Math.max(1, parseFloat(val) || 15);
     setIcr(num);
-    handleRunPrediction(undefined, undefined, undefined, undefined, undefined, num);
   };
 
   const handleTargetGlucoseChange = (val) => {
     const num = Math.max(70, Math.min(250, parseFloat(val) || 100));
     setTargetGlucose(num);
-    handleRunPrediction(undefined, undefined, undefined, num);
   };
 
   // Handle CSV Import
@@ -1488,8 +1489,8 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                         Patient Clinical Parameters
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Live Dynamic Recalculation
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                      Configure & Click Run Below
                     </span>
                   </div>
 
@@ -1597,14 +1598,24 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             {/* Master Forecast Execution Button */}
             <button
               type="button"
-              onClick={() => handleRunPrediction()}
+              id="run-forecast-btn"
+              onClick={() => handleRunPrediction(readings, carbs, activeInsulin, targetGlucose, isf, icr)}
               disabled={forecasting}
-              className="w-full py-3 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-slate-300 disabled:to-slate-400 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              className={`w-full py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer ${
+                runSuccess
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/20"
+                  : "bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-slate-300 disabled:to-slate-400 text-white shadow-indigo-500/25"
+              }`}
             >
               {forecasting ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
                   <span>Running Keras LSTM & Insulin Advisor...</span>
+                </>
+              ) : runSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>✅ Forecast & Insulin Recommendation Updated!</span>
                 </>
               ) : (
                 <>
