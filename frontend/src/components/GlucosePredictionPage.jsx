@@ -43,6 +43,18 @@ import { saveInsulinLog } from "../utils/insulinCalculator";
 import { saveMealEntry } from "../utils/dietPlanner";
 import { getLatestGlucoseReading, getLatestFoodCarbs } from "../utils/shared";
 
+// Base-aware asset path resolver supporting GitHub Pages & Vercel
+const resolveAssetUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  const clean = url.startsWith("/") ? url.slice(1) : url;
+  const base = import.meta.env.BASE_URL || "./";
+  const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+  return `${normalizedBase}${clean}`;
+};
+
 // Default 24 continuous glucose readings (past 2 hours, 5-min intervals)
 const DEFAULT_READINGS = [
   110, 112, 115, 118, 122, 126,
@@ -512,13 +524,21 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       }
 
       try {
-        // Calibrated instant local calculation identical to server rules
+        const effIsf = Number(isf) > 0 ? Number(isf) : 50;
+        const effIcr = Number(icr) > 0 ? Number(icr) : 15;
+
+        // Clinical glycemic impact of carbohydrates & active insulin on forecast
+        const carbImpact30 = (Number(currentCarbs) || 0) * (effIsf / effIcr) * 0.40;
+        const carbImpact60 = (Number(currentCarbs) || 0) * (effIsf / effIcr) * 0.75;
+        const iobImpact30 = (Number(activeInsulin) || 0) * effIsf * 0.35;
+        const iobImpact60 = (Number(activeInsulin) || 0) * effIsf * 0.70;
+
         const latest = Number(seq[seq.length - 1]);
         const prev = Number(seq[seq.length - 2] || latest);
         const velocity = Math.round((latest - prev) * 100) / 100;
 
-        const pred30 = Math.round((latest + velocity * 2.5) * 10) / 10;
-        const pred60 = Math.round((pred30 + velocity * 1.5) * 10) / 10;
+        const pred30 = Math.round(Math.max(30, Math.min(450, latest + velocity * 2.5 + carbImpact30 - iobImpact30)) * 10) / 10;
+        const pred60 = Math.round(Math.max(30, Math.min(450, pred30 + velocity * 1.5 + (carbImpact60 - carbImpact30) - (iobImpact60 - iobImpact30))) * 10) / 10;
 
         const minP = Math.min(latest, pred30, pred60);
         const maxP = Math.max(latest, pred30, pred60);
@@ -527,11 +547,11 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         let riskStatus = "✅ SAFE (IN TARGET RANGE)";
         let riskMessage = "Glucose is predicted to stay within target safe range (70–180 mg/dL).";
 
-        if (pred30 < 70 || pred60 < 70) {
+        if (minP < 70 || pred30 < 70 || pred60 < 70) {
           riskLevel = "CRITICAL_HYPO";
           riskStatus = "🚨 HYPOGLYCEMIA ALERT";
           riskMessage = `Warning: Predicted glucose drops below 70 mg/dL (${Math.round(minP)} mg/dL). Consume 15g fast-acting carbs.`;
-        } else if (pred30 > 180 || pred60 > 180) {
+        } else if (maxP > 180 || pred30 > 180 || pred60 > 180) {
           riskLevel = "WARNING_HYPER";
           riskStatus = "⚠️ HYPERGLYCEMIA WARNING";
           riskMessage = `Notice: Predicted glucose exceeds 180 mg/dL (${Math.round(maxP)} mg/dL). Check insulin guidance.`;
@@ -542,8 +562,6 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         }
 
         // Insulin recommendation
-        const effIsf = Number(isf) > 0 ? Number(isf) : 50;
-        const effIcr = Number(icr) > 0 ? Number(icr) : 15;
         const rawCorr = maxP > Number(targetGlucose) ? (maxP - Number(targetGlucose)) / effIsf : 0.0;
         const netCorr = Math.max(0, rawCorr - (Number(activeInsulin) || 0));
         const carbDose = (Number(currentCarbs) || 0) / effIcr;
@@ -553,12 +571,12 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         let suggestedBolus = 0.0;
         let insulinMessage = "Projected glucose is stable within target safe range (80–180 mg/dL). Maintain basal dosage.";
 
-        if (minP < 80.0 || velocity < -2.5) {
+        if (minP < 80.0 || (velocity < -2.5 && Number(currentCarbs) <= 5)) {
           insulinAction = "DECREASE";
           insulinStatus = "🛑 DECREASE / SUSPEND INSULIN";
-          suggestedBolus = carbDose > 0 ? Math.round(carbDose * 100) / 100 : 0.0;
+          suggestedBolus = 0.0;
           insulinMessage = `Glucose dropping towards hypoglycemia (${Math.round(minP)} mg/dL). Suspend or reduce insulin.`;
-        } else if (maxP > 180.0 || carbDose > 0.1) {
+        } else if (maxP > 180.0 || carbDose > 0.1 || netCorr > 0.1) {
           insulinAction = "INCREASE";
           insulinStatus = "💉 INCREASE / ADMINISTER INSULIN";
           suggestedBolus = Math.round((netCorr + carbDose) * 100) / 100;
@@ -791,14 +809,14 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         }
       }
       
-      // If user uploaded a file, ALWAYS show their uploaded image!
+      let resultData = null;
       if (fileObj && localPreviewUrl) {
         const fname = (fileObj.name || "").toLowerCase();
         const matchedFood = findNutritionMatch(fname);
         const isMeter = fname.includes("meter") || fname.includes("cgm") || fname.includes("reading") || fname.includes("screen");
 
         if (isMeter) {
-          setDetectionResult({
+          resultData = {
             status: "success",
             detected_type: "METER_READING",
             title: "Digital Glucose Meter Screen OCR",
@@ -808,14 +826,14 @@ export default function GlucosePredictionPage({ onBack, userId }) {
               { label: "LCD Screen Reading: 168 mg/dL", confidence: 0.96, carbs: 0.0, box: [25, 25, 50, 45] },
             ],
             extracted_glucose: 168.0,
-            suggested_action: "Extracted glucose reading: 168 mg/dL from your image. Click Apply to update forecast.",
+            suggested_action: "Extracted glucose reading: 168 mg/dL from your image. Auto-applied to forecast.",
             image_url: localPreviewUrl,
-          });
+          };
         } else {
           // Food meal photo uploaded
           const foodName = matchedFood ? matchedFood.name : "Uploaded Meal Photo";
           const carbsEstimate = matchedFood ? Number(matchedFood.carbs_g) : 55.0;
-          setDetectionResult({
+          resultData = {
             status: "success",
             detected_type: carbsEstimate > 40 ? "MEAL_HIGH_CARB" : "MEAL_LOW_CARB",
             title: `AI Vision: ${foodName}`,
@@ -825,12 +843,12 @@ export default function GlucosePredictionPage({ onBack, userId }) {
               { label: `${foodName} (${carbsEstimate}g Carbs)`, confidence: 0.95, carbs: carbsEstimate, box: [15, 15, 70, 70] },
             ],
             extracted_glucose: null,
-            suggested_action: `AI Vision analyzed meal image and estimated ${carbsEstimate}g carbohydrates. Click Apply to include in forecast.`,
+            suggested_action: `AI Vision analyzed meal image and estimated ${carbsEstimate}g carbohydrates. Auto-applied to forecast.`,
             image_url: localPreviewUrl,
-          });
+          };
         }
       } else if (sampleKey === "pizza") {
-        setDetectionResult({
+        resultData = {
           status: "success",
           detected_type: "MEAL_HIGH_CARB",
           title: "Pepperoni Pizza & Beverage Detected",
@@ -841,11 +859,11 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             { label: "Soda / Sweet Drink", confidence: 0.92, carbs: 20.0, box: [60, 60, 32, 28] },
           ],
           extracted_glucose: null,
-          suggested_action: "High glycemic load detected. Auto-populated meal carbs to 70g.",
-          image_url: "/static/images/pizza.png",
-        });
+          suggested_action: "High glycemic load detected. Auto-populated meal carbs to 70g and updated forecast.",
+          image_url: resolveAssetUrl("images/pizza.png"),
+        };
       } else if (sampleKey === "salad") {
-        setDetectionResult({
+        resultData = {
           status: "success",
           detected_type: "MEAL_LOW_CARB",
           title: "Grilled Chicken & Greens Salad",
@@ -856,11 +874,11 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             { label: "Avocado & Tomatoes", confidence: 0.94, carbs: 10.0, box: [40, 30, 40, 40] },
           ],
           extracted_glucose: null,
-          suggested_action: "Healthy low-carb meal detected. Auto-populated meal carbs to 15g.",
-          image_url: "/static/images/salad.png",
-        });
+          suggested_action: "Healthy low-carb meal detected. Auto-populated meal carbs to 15g and updated forecast.",
+          image_url: resolveAssetUrl("images/salad.png"),
+        };
       } else {
-        setDetectionResult({
+        resultData = {
           status: "success",
           detected_type: "METER_READING",
           title: "Digital Glucose Meter Screen OCR",
@@ -870,9 +888,28 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             { label: "LCD Reading: 168 mg/dL", confidence: 0.98, carbs: 0.0, box: [28, 32, 44, 30] },
           ],
           extracted_glucose: 168.0,
-          suggested_action: "Extracted current reading: 168 mg/dL. Sensor sequence updated.",
-          image_url: "/static/images/meter.png",
-        });
+          suggested_action: "Extracted current reading: 168 mg/dL. Sensor sequence and forecast updated.",
+          image_url: resolveAssetUrl("images/meter.png"),
+        };
+      }
+
+      if (resultData) {
+        setDetectionResult(resultData);
+        let nextCarbs = carbs;
+        let nextReadings = [...readings];
+
+        if (resultData.estimated_carbs > 0) {
+          nextCarbs = resultData.estimated_carbs;
+          setCarbs(nextCarbs);
+        }
+
+        if (resultData.extracted_glucose) {
+          nextReadings[23] = Number(resultData.extracted_glucose);
+          setReadings(nextReadings);
+          setSelectedWaveform("custom");
+        }
+
+        handleRunPrediction(nextReadings, nextCarbs);
       }
     } finally {
       setIsDetecting(false);
@@ -1157,7 +1194,20 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                       <div className="relative w-full h-44 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center">
                         {detectionResult?.image_url ? (
                           <img
-                            src={detectionResult.image_url}
+                            src={resolveAssetUrl(detectionResult.image_url)}
+                            onError={(e) => {
+                              if (!e.currentTarget.dataset.retried) {
+                                e.currentTarget.dataset.retried = "1";
+                                const src = detectionResult.image_url || "";
+                                const baseName = src.split("/").pop();
+                                e.currentTarget.src = `./images/${baseName}`;
+                              } else if (e.currentTarget.dataset.retried === "1") {
+                                e.currentTarget.dataset.retried = "2";
+                                const src = detectionResult.image_url || "";
+                                const baseName = src.split("/").pop();
+                                e.currentTarget.src = `./static/images/${baseName}`;
+                              }
+                            }}
                             alt="Detection Preview"
                             className="w-full h-full object-cover"
                           />

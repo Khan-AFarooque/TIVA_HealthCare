@@ -1,0 +1,9 @@
+{
+  "name": "tiva-healthcare",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend install --legacy-peer-deps && npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev"
+  }
+}

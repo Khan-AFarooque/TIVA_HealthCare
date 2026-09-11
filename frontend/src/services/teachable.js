@@ -15,13 +15,20 @@
 
 import * as tmImage from "@teachablemachine/image";
 
+function getAssetPath(relativePath) {
+  const base = import.meta.env.BASE_URL || "./";
+  const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+  const cleanPath = relativePath.startsWith("/") ? relativePath.slice(1) : relativePath;
+  return `${normalizedBase}${cleanPath}`;
+}
+
 /** Local bundled model files (served by Vite from /public). */
-const MODEL_URL = "/tm-model/model.json";
-const METADATA_URL = "/tm-model/metadata.json";
+const MODEL_URL = getAssetPath("tm-model/model.json");
+const METADATA_URL = getAssetPath("tm-model/metadata.json");
 
 /** Local bundled Model 2 files (served by Vite from /public). */
-const MODEL_URL_2 = "/food-model-2/model.json";
-const METADATA_URL_2 = "/food-model-2/metadata.json";
+const MODEL_URL_2 = getAssetPath("food-model-2/model.json");
+const METADATA_URL_2 = getAssetPath("food-model-2/metadata.json");
 
 /** Confidence below this = "Unknown Food" (untrained/unrelated image). */
 export const CONFIDENCE_THRESHOLD = 0.2;
@@ -35,9 +42,22 @@ let _model2 = null;
  */
 export async function loadTeachableModel() {
   if (_model) return _model;
-  const model = await tmImage.load(MODEL_URL, METADATA_URL);
-  _model = model;
-  return model;
+  try {
+    const model = await tmImage.load(MODEL_URL, METADATA_URL);
+    _model = model;
+    return model;
+  } catch (err) {
+    console.warn("Primary tm-model path failed, trying relative fallback:", err);
+    try {
+      const model = await tmImage.load("./tm-model/model.json", "./tm-model/metadata.json");
+      _model = model;
+      return model;
+    } catch (err2) {
+      const model = await tmImage.load("/tm-model/model.json", "/tm-model/metadata.json");
+      _model = model;
+      return model;
+    }
+  }
 }
 
 /**
@@ -46,9 +66,22 @@ export async function loadTeachableModel() {
  */
 export async function loadTeachableModel2() {
   if (_model2) return _model2;
-  const model2 = await tmImage.load(MODEL_URL_2, METADATA_URL_2);
-  _model2 = model2;
-  return model2;
+  try {
+    const model2 = await tmImage.load(MODEL_URL_2, METADATA_URL_2);
+    _model2 = model2;
+    return model2;
+  } catch (err) {
+    console.warn("Primary food-model-2 path failed, trying relative fallback:", err);
+    try {
+      const model2 = await tmImage.load("./food-model-2/model.json", "./food-model-2/metadata.json");
+      _model2 = model2;
+      return model2;
+    } catch (err2) {
+      const model2 = await tmImage.load("/food-model-2/model.json", "/food-model-2/metadata.json");
+      _model2 = model2;
+      return model2;
+    }
+  }
 }
 
 /**
