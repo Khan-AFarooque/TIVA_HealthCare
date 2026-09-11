@@ -133,6 +133,21 @@ export default function FoodAIPage({ onBack, userId }) {
     addToHistory(entry);
   }, [addToHistory]);
 
+  const handleCorrection = useCallback(async (corrected) => {
+    setResult(corrected);
+    if (corrected && corrected.food_name !== "Unknown Food") {
+      try {
+        const thumb = await createThumbnail(image);
+        addToHistory({
+          ...corrected,
+          image: thumb || (typeof image === "string" ? image : null),
+        });
+      } catch {
+        addToHistory(corrected);
+      }
+    }
+  }, [image, addToHistory]);
+
   const handleSelectHistory = useCallback((item) => {
     if (!item) return;
     setResult(item);
@@ -211,6 +226,7 @@ export default function FoodAIPage({ onBack, userId }) {
               result={result}
               onReset={handleReset}
               onSave={handleSaveMeal}
+              onCorrection={handleCorrection}
             />
           )}
         </div>

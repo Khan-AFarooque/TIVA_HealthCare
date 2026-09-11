@@ -109,23 +109,23 @@ function predictWithModel(model, element) {
  * @returns {Promise<Array<{className: string, probability: number}>>}
  */
 export async function predictAllModels(element) {
-  const results = [];
+  const [res1, res2] = await Promise.allSettled([
+    predictElement(element),
+    predictElement2(element),
+  ]);
 
-  const p1 = await predictElement(element).catch(() => null);
-  if (p1) results.push(...p1);
-  else {
-    const p2 = await predictElement2(element).catch(() => null);
-    if (p2) return p2;
+  const results = [];
+  if (res1.status === "fulfilled" && Array.isArray(res1.value)) {
+    results.push(...res1.value);
+  }
+  if (res2.status === "fulfilled" && Array.isArray(res2.value)) {
+    results.push(...res2.value);
+  }
+
+  if (results.length === 0) {
     throw new Error(
       "Food recognition is temporarily unavailable. Please try again."
     );
-  }
-
-  try {
-    const p2 = await predictElement2(element);
-    if (p2 && p2.length) results.push(...p2);
-  } catch {
-    /* model 2 unavailable — model 1 results already returned above */
   }
 
   return results;

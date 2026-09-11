@@ -15,9 +15,15 @@ import {
   Plus,
   Minus as MinusIcon,
   Sparkles,
+  ThumbsUp,
+  ThumbsDown,
+  CheckCircle2,
+  Edit3,
+  Search,
 } from "lucide-react";
 import ConfidenceBar from "./ConfidenceBar";
 import { extractReferenceWeight } from "../services/predictor";
+import nutritionData from "../data/indian_foods.json";
 
 const isUnknown = (r) => !r || r.food_name === "Unknown Food";
 
@@ -43,7 +49,7 @@ function Stat({ icon: Icon, label, value, unit, accent, baseValue, isScaled }) {
   );
 }
 
-export default function ResultCard({ result, onReset, onSave }) {
+export default function ResultCard({ result, onReset, onSave, onCorrection }) {
   // Extract reference weight per standard serving (e.g. 40g for chapati, 150g for rice)
   const referenceG = useMemo(() => {
     if (!result) return 100;
@@ -56,14 +62,77 @@ export default function ResultCard({ result, onReset, onSave }) {
   const [customGrams, setCustomGrams] = useState(referenceG || 100);
   const [quantitySaved, setQuantitySaved] = useState(false);
 
+  // AI Feedback & Correction State
+  const [feedbackState, setFeedbackState] = useState("idle"); // 'idle' | 'correct' | 'show_correction' | 'corrected'
+  const [correctionSearch, setCorrectionSearch] = useState("");
+  const [feedbackNotice, setFeedbackNotice] = useState("");
+
   // Sync state if result changes
   useEffect(() => {
     if (result) {
       setServings(1);
       setCustomGrams(referenceG || 100);
       setQuantitySaved(false);
+      setFeedbackState("idle");
+      setCorrectionSearch("");
+      setFeedbackNotice("");
     }
   }, [result, referenceG]);
+
+  const handleConfirmCorrect = () => {
+    setFeedbackState("correct");
+    setFeedbackNotice(`✅ Thank you! "${result.food_name}" confirmed as correct.`);
+    try {
+      const logs = JSON.parse(localStorage.getItem("tiva_food_feedback") || "[]");
+      logs.unshift({
+        food_name: result.food_name,
+        is_correct: true,
+        timestamp: new Date().toISOString(),
+      });
+      localStorage.setItem("tiva_food_feedback", JSON.stringify(logs.slice(0, 50)));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleSelectCorrectFood = (item) => {
+    setFeedbackState("corrected");
+    setFeedbackNotice(`✅ Corrected to ${item.name}! Nutrition & carbs updated.`);
+    
+    // Save to feedback logs
+    try {
+      const logs = JSON.parse(localStorage.getItem("tiva_food_feedback") || "[]");
+      logs.unshift({
+        original: result.food_name,
+        corrected_to: item.name,
+        is_correct: false,
+        timestamp: new Date().toISOString(),
+      });
+      localStorage.setItem("tiva_food_feedback", JSON.stringify(logs.slice(0, 50)));
+    } catch {
+      /* ignore */
+    }
+
+    const updatedResult = {
+      ...result,
+      food_name: item.name,
+      category: item.category || "Indian Dish",
+      serving_size: item.serving_size || "1 serving",
+      weight_g: item.weight_g || 100,
+      carbs_g: Number(item.carbs_g),
+      calories_kcal: Number(item.calories_kcal),
+      protein_g: Number(item.protein_g),
+      fat_g: Number(item.fat_g),
+      glycemic_index: item.glycemic_index ?? 55,
+      recommendation: item.recommendation || result.recommendation,
+      confidence: 0.96,
+      hasNutrition: true,
+    };
+
+    if (onCorrection) {
+      onCorrection(updatedResult);
+    }
+  };
 
   // When user updates servings: update grams synchronously
   const handleServingsChange = (val) => {
@@ -203,6 +272,128 @@ export default function ResultCard({ result, onReset, onSave }) {
             <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
               Reference: {referenceG}g / serving
             </span>
+          )}
+        </div>
+
+        {/* ── AI ACCURACY FEEDBACK & CORRECTION COMPONENT ── */}
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-blue-50/60 p-3.5 sm:p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+              <span>🎯</span>
+              <span>Is this prediction accurate?</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {feedbackState === "correct" ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed Correct
+                </span>
+              ) : feedbackState === "corrected" ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> User Corrected
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleConfirmCorrect}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <ThumbsUp className="w-3.5 h-3.5 text-emerald-600" /> Yes, Correct
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackState(feedbackState === "show_correction" ? "idle" : "show_correction")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-indigo-600" /> Wrong Food? Correct it
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Feedback Notice Banner */}
+          {feedbackNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 flex items-center justify-between"
+            >
+              <span>{feedbackNotice}</span>
+              <button
+                type="button"
+                onClick={() => setFeedbackState("show_correction")}
+                className="text-[11px] underline text-indigo-600 font-bold ml-2 cursor-pointer"
+              >
+                Change again
+              </button>
+            </motion.div>
+          )}
+
+          {/* Interactive Correction Panel */}
+          {feedbackState === "show_correction" && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="pt-2 border-t border-indigo-100/80 space-y-2.5"
+            >
+              <div className="flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={correctionSearch}
+                  onChange={(e) => setCorrectionSearch(e.target.value)}
+                  placeholder="Search correct food (e.g. Biryani, Dosa, Dal Makhani)..."
+                  className="w-full text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+
+              {/* Quick Select Popular Chips */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
+                  Quick Select Common Dishes:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {["Biryani", "White Rice", "Dal Makhani", "Paneer Butter Masala", "Masala Dosa", "Samosa", "Chapati", "Idli"].map((name) => {
+                    const found = nutritionData.foods.find((f) => f.name.toLowerCase() === name.toLowerCase());
+                    if (!found) return null;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => handleSelectCorrectFood(found)}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700 transition-all cursor-pointer shadow-2xs"
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Filtered Search Results */}
+              {correctionSearch.trim().length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 space-y-0.5 shadow-sm">
+                  {nutritionData.foods
+                    .filter((f) => f.name.toLowerCase().includes(correctionSearch.toLowerCase().trim()))
+                    .slice(0, 8)
+                    .map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => handleSelectCorrectFood(item)}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="font-bold text-slate-800">{item.name}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {item.category} • {item.carbs_g}g carbs
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </motion.div>
           )}
         </div>
 

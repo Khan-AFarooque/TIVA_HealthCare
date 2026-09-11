@@ -25,7 +25,7 @@ const INSULIN_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-export default function InsulinCalculatorPage({ onBack }) {
+export default function InsulinCalculatorPage({ onBack, userId }) {
   // ── Insulin Log form ──
   const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [logTime, setLogTime] = useState(() => new Date().toTimeString().slice(0, 5));
