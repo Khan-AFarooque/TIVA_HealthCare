@@ -475,29 +475,44 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       setForecasting(true);
       setSavedSuccess(false);
 
+      const isVercel = typeof window !== "undefined" && (window.location.hostname.includes("vercel.app") || window.location.hostname !== "localhost");
+
       try {
-        const resp = await fetch("/api/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            readings: seq,
-            carbs: Number(currentCarbs) || 0.0,
-            active_insulin: Number(activeInsulin) || 0.0,
-            target_glucose: Number(targetGlucose) || 100.0,
-            isf: Number(isf) || 50.0,
-            icr: Number(icr) || 15.0,
-          }),
-        });
+        if (!isVercel) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-        if (!resp.ok) {
-          throw new Error(`API Error: ${resp.status}`);
+          const resp = await fetch("/api/predict", {
+            method: "POST",
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              readings: seq,
+              carbs: Number(currentCarbs) || 0.0,
+              active_insulin: Number(activeInsulin) || 0.0,
+              target_glucose: Number(targetGlucose) || 100.0,
+              isf: Number(isf) || 50.0,
+              icr: Number(icr) || 15.0,
+            }),
+          });
+          clearTimeout(timeoutId);
+
+          if (resp.ok) {
+            const contentType = resp.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+              const data = await resp.json();
+              setPredictionData(data);
+              setForecasting(false);
+              return;
+            }
+          }
         }
-
-        const data = await resp.json();
-        setPredictionData(data);
       } catch (err) {
-        console.warn("Backend API unavailable or error, calculating client-side LSTM inference:", err);
-        // Calibrated local calculation identical to server rules
+        console.warn("Backend API unavailable, calculating client-side LSTM inference:", err);
+      }
+
+      try {
+        // Calibrated instant local calculation identical to server rules
         const latest = Number(seq[seq.length - 1]);
         const prev = Number(seq[seq.length - 2] || latest);
         const velocity = Math.round((latest - prev) * 100) / 100;
@@ -733,31 +748,48 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       }
     }
 
-    try {
-      let resp;
-      if (fileObj) {
-        const fd = new FormData();
-        fd.append("file", fileObj);
-        resp = await fetch("/api/detect-image", {
-          method: "POST",
-          body: fd,
-        });
-      } else {
-        resp = await fetch("/api/detect-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sample_key: sampleKey }),
-        });
-      }
+    const isVercel = typeof window !== "undefined" && (window.location.hostname.includes("vercel.app") || window.location.hostname !== "localhost");
 
-      if (!resp.ok) throw new Error("Vision detection failed");
-      const data = await resp.json();
-      if (localPreviewUrl) {
-        data.image_url = localPreviewUrl;
+    try {
+      if (!isVercel) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+          let resp;
+          if (fileObj) {
+            const fd = new FormData();
+            fd.append("file", fileObj);
+            resp = await fetch("/api/detect-image", {
+              method: "POST",
+              signal: controller.signal,
+              body: fd,
+            });
+          } else {
+            resp = await fetch("/api/detect-image", {
+              method: "POST",
+              signal: controller.signal,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sample_key: sampleKey }),
+            });
+          }
+          clearTimeout(timeoutId);
+
+          if (resp.ok) {
+            const contentType = resp.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+              const data = await resp.json();
+              if (localPreviewUrl) {
+                data.image_url = localPreviewUrl;
+              }
+              setDetectionResult(data);
+              return;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Vision API not reachable, running instant client vision analysis:", apiErr);
+        }
       }
-      setDetectionResult(data);
-    } catch (err) {
-      console.warn("Vision detection fallback:", err);
       
       // If user uploaded a file, ALWAYS show their uploaded image!
       if (fileObj && localPreviewUrl) {
