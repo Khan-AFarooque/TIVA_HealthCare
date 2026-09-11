@@ -42,6 +42,7 @@ import ExercisePlannerPage from "./components/ExercisePlannerPage";
 import DailyReportPage from "./components/DailyReportPage";
 import AlertsPage from "./components/AlertsPage";
 import EmergencyDispatchModal from "./components/EmergencyDispatchModal";
+import UserFeedbackModal from "./components/UserFeedbackModal";
 import DashboardCgmGraph from "./components/DashboardCgmGraph";
 import DashboardAnalyticsHub from "./components/DashboardAnalyticsHub";
 import { playEmergencyAlarm, stopEmergencyAlarm } from "./utils/audioAlert";
@@ -1053,6 +1054,7 @@ export default function App() {
   const [globalDispatchMode, setGlobalDispatchMode] = useState("call");
   const [globalHazardDetail, setGlobalHazardDetail] = useState(null);
   const [globalCaregiver, setGlobalCaregiver] = useState(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   // Track unacknowledged alerts globally & listen for emergency hazard alerts
   useEffect(() => {
@@ -1244,6 +1246,17 @@ export default function App() {
                 <span className="hidden xs:inline">Call Caregiver</span>
               </button>
 
+              {/* User Feedback Button */}
+              <button
+                type="button"
+                onClick={() => setIsFeedbackOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200 transition-all cursor-pointer shadow-xs"
+                title="Share User Feedback & Review Experience"
+              >
+                <MessageSquare className="h-3.5 w-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">Feedback</span>
+              </button>
+
               {/* Critical Hazard Alert & Bell Icon */}
               <button
                 type="button"
@@ -1340,7 +1353,7 @@ export default function App() {
 
             {/* Sidebar Footer Info */}
             {!isSidebarCollapsed && isLoggedIn && userName && (
-              <div className="p-3.5 border-t border-slate-100 bg-slate-50/70">
+              <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 space-y-2">
                 <div
                   onClick={() => navigate("profile")}
                   className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
@@ -1354,6 +1367,16 @@ export default function App() {
                     <p className="text-[10px] text-emerald-600 font-semibold">Active Session</p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFeedbackOpen(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200/80 transition-colors cursor-pointer"
+                  title="Share User Feedback"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Give Feedback</span>
+                </button>
               </div>
             )}
           </aside>
@@ -1426,13 +1449,25 @@ export default function App() {
                         </div>
                         <span className="text-xs font-bold text-slate-800 truncate">{userName}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Logout
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            setIsFeedbackOpen(true);
+                          }}
+                          className="text-xs text-indigo-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Feedback
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Logout
+                        </button>
+                      </div>
                     </div>
                   )}
                 </motion.div>
@@ -1508,6 +1543,13 @@ export default function App() {
           status={globalHazardDetail?.level === "low" ? "GLUCOSE_CRITICAL_LOW" : "GLUCOSE_CRITICAL_HIGH"}
           userId={userId}
           onCaregiverUpdated={(updated) => setGlobalCaregiver(updated)}
+        />
+
+        {/* User Feedback Modal */}
+        <UserFeedbackModal
+          isOpen={isFeedbackOpen}
+          onClose={() => setIsFeedbackOpen(false)}
+          userId={userId}
         />
       </div>
     </div>
