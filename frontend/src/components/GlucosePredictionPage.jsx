@@ -56,34 +56,38 @@ const resolveAssetUrl = (url) => {
   return `${normalizedBase}${clean}`;
 };
 
-// Default 24 continuous glucose readings (past 2 hours, 5-min intervals)
-const DEFAULT_READINGS = [
-  110, 112, 115, 118, 122, 126,
-  130, 135, 141, 146, 152, 157,
-  162, 166, 170, 173, 175, 178,
-  180, 182, 183, 185, 186, 187,
-];
-
 const PRESETS = {
-  rising_spike: [
-    110, 112, 115, 118, 122, 126,
-    130, 135, 141, 146, 152, 157,
-    162, 166, 170, 173, 175, 178,
-    180, 182, 183, 185, 186, 187,
-  ],
-  hypo_warning: [
-    140, 136, 131, 125, 118, 112,
-    106, 100, 95, 90, 85, 81,
-    78, 75, 73, 71, 70, 69,
-    68, 67, 66, 65, 64, 63,
-  ],
-  stable_normal: [
-    115, 116, 114, 115, 117, 116,
-    115, 114, 116, 115, 117, 118,
-    116, 115, 114, 115, 116, 117,
-    115, 114, 116, 115, 116, 117,
-  ],
+  rising_spike: {
+    readings: [
+      110, 112, 115, 118, 122, 126,
+      130, 135, 141, 148, 156, 165,
+      172, 178, 184, 189, 194, 199,
+      204, 210, 216, 223, 230, 238,
+    ],
+    carbs: 60,
+  },
+  hypo_warning: {
+    readings: [
+      140, 136, 131, 125, 118, 112,
+      106, 100, 95, 90, 85, 81,
+      78, 75, 73, 71, 70, 68,
+      67, 66, 65, 64, 63, 62,
+    ],
+    carbs: 0,
+  },
+  stable_normal: {
+    readings: [
+      110, 112, 111, 113, 112, 114,
+      113, 112, 114, 115, 113, 112,
+      111, 113, 114, 112, 113, 114,
+      112, 113, 112, 113, 114, 113,
+    ],
+    carbs: 0,
+  },
 };
+
+// Default 24 continuous glucose readings (past 2 hours, 5-min intervals)
+const DEFAULT_READINGS = PRESETS.rising_spike.readings;
 
 /* ── Interactive Dual-Horizon CGM & Predictive Curve Chart (SVG) ── */
 function GlucoChart({ readings, pred30, pred60 }) {
@@ -479,11 +483,21 @@ export default function GlucosePredictionPage({ onBack, userId }) {
   const [applySuccess, setApplySuccess] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Keep ref to latest clinical state so handleRunPrediction is completely stable without re-trigger loops
+  const stateRef = useRef({ readings, carbs, activeInsulin, targetGlucose, isf, icr });
+  useEffect(() => {
+    stateRef.current = { readings, carbs, activeInsulin, targetGlucose, isf, icr };
+  });
+
   // Run Forecast Calculation using API with calibrated fallback
   const handleRunPrediction = useCallback(
-    async (overrideReadings, overrideCarbs) => {
-      const seq = overrideReadings || readings;
-      const currentCarbs = overrideCarbs !== undefined ? overrideCarbs : carbs;
+    async (overrideReadings, overrideCarbs, overrideInsulin, overrideTarget, overrideIsf, overrideIcr) => {
+      const seq = overrideReadings || stateRef.current.readings;
+      const currentCarbs = overrideCarbs !== undefined ? overrideCarbs : stateRef.current.carbs;
+      const currentInsulin = overrideInsulin !== undefined ? overrideInsulin : stateRef.current.activeInsulin;
+      const currentTarget = overrideTarget !== undefined ? overrideTarget : stateRef.current.targetGlucose;
+      const currentIsf = overrideIsf !== undefined ? overrideIsf : stateRef.current.isf;
+      const currentIcr = overrideIcr !== undefined ? overrideIcr : stateRef.current.icr;
 
       setForecasting(true);
       setSavedSuccess(false);
@@ -502,10 +516,10 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             body: JSON.stringify({
               readings: seq,
               carbs: Number(currentCarbs) || 0.0,
-              active_insulin: Number(activeInsulin) || 0.0,
-              target_glucose: Number(targetGlucose) || 100.0,
-              isf: Number(isf) || 50.0,
-              icr: Number(icr) || 15.0,
+              active_insulin: Number(currentInsulin) || 0.0,
+              target_glucose: Number(currentTarget) || 100.0,
+              isf: Number(currentIsf) || 50.0,
+              icr: Number(currentIcr) || 15.0,
             }),
           });
           clearTimeout(timeoutId);
@@ -525,14 +539,14 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       }
 
       try {
-        const effIsf = Number(isf) > 0 ? Number(isf) : 50;
-        const effIcr = Number(icr) > 0 ? Number(icr) : 15;
+        const effIsf = Number(currentIsf) > 0 ? Number(currentIsf) : 50;
+        const effIcr = Number(currentIcr) > 0 ? Number(currentIcr) : 15;
 
         // Clinical glycemic impact of carbohydrates & active insulin on forecast
         const carbImpact30 = (Number(currentCarbs) || 0) * (effIsf / effIcr) * 0.40;
         const carbImpact60 = (Number(currentCarbs) || 0) * (effIsf / effIcr) * 0.75;
-        const iobImpact30 = (Number(activeInsulin) || 0) * effIsf * 0.35;
-        const iobImpact60 = (Number(activeInsulin) || 0) * effIsf * 0.70;
+        const iobImpact30 = (Number(currentInsulin) || 0) * effIsf * 0.35;
+        const iobImpact60 = (Number(currentInsulin) || 0) * effIsf * 0.70;
 
         const latest = Number(seq[seq.length - 1]);
         const prev = Number(seq[seq.length - 2] || latest);
@@ -563,8 +577,8 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         }
 
         // Insulin recommendation
-        const rawCorr = maxP > Number(targetGlucose) ? (maxP - Number(targetGlucose)) / effIsf : 0.0;
-        const netCorr = Math.max(0, rawCorr - (Number(activeInsulin) || 0));
+        const rawCorr = maxP > Number(currentTarget) ? (maxP - Number(currentTarget)) / effIsf : 0.0;
+        const netCorr = Math.max(0, rawCorr - (Number(currentInsulin) || 0));
         const carbDose = (Number(currentCarbs) || 0) / effIcr;
 
         let insulinAction = "MAINTAIN";
@@ -603,7 +617,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         setForecasting(false);
       }
     },
-    [readings, carbs, activeInsulin, targetGlucose, isf, icr]
+    []
   );
 
   // Calibrate 24-point CGM sequence & clinical parameters to active user profile on mount
@@ -630,11 +644,24 @@ export default function GlucosePredictionPage({ onBack, userId }) {
         setReadings(activeSeq);
       }
 
-      if (prof?.targetGlucose) setTargetGlucose(Number(prof.targetGlucose));
-      if (prof?.isf) setIsf(Number(prof.isf));
+      let activeTarget = 100;
+      let activeIsf = 50;
+      let activeIcr = 15;
+
+      if (prof?.targetGlucose) {
+        activeTarget = Number(prof.targetGlucose);
+        setTargetGlucose(activeTarget);
+      }
+      if (prof?.isf) {
+        activeIsf = Number(prof.isf);
+        setIsf(activeIsf);
+      }
       if (prof?.icr) {
         const parsedIcr = Number(String(prof.icr).replace("1:", "").trim());
-        if (parsedIcr > 0) setIcr(parsedIcr);
+        if (parsedIcr > 0) {
+          activeIcr = parsedIcr;
+          setIcr(activeIcr);
+        }
       }
 
       const recentFood = getLatestFoodCarbs(uid);
@@ -642,11 +669,12 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       if (foodCarbs > 0) setCarbs(foodCarbs);
 
       // Auto-run forecast prediction based on user's calibrated inputs
-      handleRunPrediction(activeSeq, foodCarbs);
+      handleRunPrediction(activeSeq, foodCarbs, 0, activeTarget, activeIsf, activeIcr);
     } catch {
       handleRunPrediction(DEFAULT_READINGS, 0);
     }
-  }, [userId, handleRunPrediction]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // ── Workable Insulin & Rescue Carb Handlers ──
   const [insulinLoggedMsg, setInsulinLoggedMsg] = useState("");
@@ -687,19 +715,16 @@ export default function GlucosePredictionPage({ onBack, userId }) {
     window.dispatchEvent(new Event("tiva-data-updated"));
   };
 
-  // Initial auto-forecast on mount
-  useEffect(() => {
-    handleRunPrediction();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Handle Loading Waveform Presets
   const handleLoadWaveform = (key) => {
     setSelectedWaveform(key);
-    if (PRESETS[key]) {
-      const nextReadings = [...PRESETS[key]];
+    const preset = PRESETS[key];
+    if (preset) {
+      const nextReadings = [...preset.readings];
+      const nextCarbs = preset.carbs;
       setReadings(nextReadings);
-      handleRunPrediction(nextReadings);
+      setCarbs(nextCarbs);
+      handleRunPrediction(nextReadings, nextCarbs);
     }
   };
 
@@ -710,6 +735,38 @@ export default function GlucosePredictionPage({ onBack, userId }) {
     updated[index] = isNaN(num) ? 120 : num;
     setReadings(updated);
     setSelectedWaveform("custom");
+    handleRunPrediction(updated);
+  };
+
+  // Handle Patient Parameter Adjustments with immediate real-time forecast update
+  const handleCarbsChange = (val) => {
+    const num = Math.max(0, parseFloat(val) || 0);
+    setCarbs(num);
+    handleRunPrediction(undefined, num);
+  };
+
+  const handleActiveInsulinChange = (val) => {
+    const num = Math.max(0, parseFloat(val) || 0);
+    setActiveInsulin(num);
+    handleRunPrediction(undefined, undefined, num);
+  };
+
+  const handleIsfChange = (val) => {
+    const num = Math.max(10, parseFloat(val) || 50);
+    setIsf(num);
+    handleRunPrediction(undefined, undefined, undefined, undefined, num);
+  };
+
+  const handleIcrChange = (val) => {
+    const num = Math.max(1, parseFloat(val) || 15);
+    setIcr(num);
+    handleRunPrediction(undefined, undefined, undefined, undefined, undefined, num);
+  };
+
+  const handleTargetGlucoseChange = (val) => {
+    const num = Math.max(70, Math.min(250, parseFloat(val) || 100));
+    setTargetGlucose(num);
+    handleRunPrediction(undefined, undefined, undefined, num);
   };
 
   // Handle CSV Import
@@ -733,6 +790,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       }
     };
     reader.readAsText(file);
+    e.target.value = "";
   };
 
   // Trigger Vision Detection (Preset Key or File Upload)
@@ -1423,11 +1481,44 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             {activeTab === "clinical" && (
               <div className="space-y-3.5">
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Stethoscope className="w-4 h-4 text-indigo-600" />
-                    <span className="text-xs font-bold text-slate-800">
-                      Patient Clinical Parameters
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Stethoscope className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800">
+                        Patient Clinical Parameters
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Live Dynamic Recalculation
                     </span>
+                  </div>
+
+                  {/* Quick Carb Amount Presets */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Quick Meal Carb Test:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: "Fasting (0g)", value: 0 },
+                        { label: "Snack (15g)", value: 15 },
+                        { label: "Lunch (45g)", value: 45 },
+                        { label: "Heavy (75g)", value: 75 },
+                      ].map((chip) => (
+                        <button
+                          key={chip.value}
+                          type="button"
+                          onClick={() => handleCarbsChange(chip.value)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
+                            carbs === chip.value
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700"
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1440,7 +1531,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                         min="0"
                         step="5"
                         value={carbs}
-                        onChange={(e) => setCarbs(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleCarbsChange(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
@@ -1453,7 +1544,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                         min="0"
                         step="0.5"
                         value={activeInsulin}
-                        onChange={(e) => setActiveInsulin(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleActiveInsulinChange(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
@@ -1466,7 +1557,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                         min="10"
                         step="5"
                         value={isf}
-                        onChange={(e) => setIsf(parseFloat(e.target.value) || 50)}
+                        onChange={(e) => handleIsfChange(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
@@ -1479,7 +1570,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                         min="1"
                         step="1"
                         value={icr}
-                        onChange={(e) => setIcr(parseFloat(e.target.value) || 15)}
+                        onChange={(e) => handleIcrChange(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
@@ -1495,7 +1586,7 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                       max="180"
                       step="5"
                       value={targetGlucose}
-                      onChange={(e) => setTargetGlucose(parseFloat(e.target.value) || 100)}
+                      onChange={(e) => handleTargetGlucoseChange(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                     />
                   </div>
