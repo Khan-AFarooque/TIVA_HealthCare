@@ -42,6 +42,7 @@ import { parseCgmCsv, DEMO_CGM_TRACES } from "../utils/cgmParser";
 import { saveInsulinLog } from "../utils/insulinCalculator";
 import { saveMealEntry } from "../utils/dietPlanner";
 import { getLatestGlucoseReading, getLatestFoodCarbs } from "../utils/shared";
+import { predictFoodFromBlob, findNutritionMatch } from "../services/predictor";
 
 // Base-aware asset path resolver supporting GitHub Pages & Vercel
 const resolveAssetUrl = (url) => {
@@ -598,24 +599,6 @@ export default function GlucosePredictionPage({ onBack, userId }) {
           carb_dose: Math.round(carbDose * 100) / 100,
           insulin_message: insulinMessage,
         });
-
-        // Trigger High / Low Hazard Alert event for audio noise & call popup
-        const isHazardLow = minP < 70 || latest < 70 || pred30 < 70 || pred60 < 70;
-        const isHazardHigh = maxP > 180 || latest > 180 || pred30 > 180 || pred60 > 180;
-        if (isHazardLow || isHazardHigh) {
-          window.dispatchEvent(
-            new CustomEvent("tiva-glucose-hazard-alert", {
-              detail: {
-                glucose: latest,
-                predictedGlucose: pred60,
-                level: isHazardLow ? "low" : "high",
-                message: isHazardLow
-                  ? `Hypoglycemia detected (${Math.round(minP)} mg/dL). Immediate attention required!`
-                  : `Hyperglycemia alert: projected peak ${Math.round(maxP)} mg/dL.`,
-              },
-            })
-          );
-        }
       } finally {
         setForecasting(false);
       }
@@ -812,7 +795,6 @@ export default function GlucosePredictionPage({ onBack, userId }) {
       let resultData = null;
       if (fileObj && localPreviewUrl) {
         const fname = (fileObj.name || "").toLowerCase();
-        const matchedFood = findNutritionMatch(fname);
         const isMeter = fname.includes("meter") || fname.includes("cgm") || fname.includes("reading") || fname.includes("screen");
 
         if (isMeter) {
@@ -830,20 +812,40 @@ export default function GlucosePredictionPage({ onBack, userId }) {
             image_url: localPreviewUrl,
           };
         } else {
-          // Food meal photo uploaded
-          const foodName = matchedFood ? matchedFood.name : "Uploaded Meal Photo";
-          const carbsEstimate = matchedFood ? Number(matchedFood.carbs_g) : 55.0;
+          // Food meal photo uploaded: Run client AI food recognition!
+          let foodName = "Uploaded Meal Photo";
+          let carbsEstimate = 50.0;
+          let conf = 0.94;
+
+          try {
+            const foodRes = await predictFoodFromBlob(fileObj);
+            if (foodRes && foodRes.food_name) {
+              foodName = foodRes.food_name;
+              carbsEstimate = Number(foodRes.carbs_g) || 50.0;
+              conf = Number(foodRes.confidence) || 0.94;
+            }
+          } catch (modelErr) {
+            console.warn("Client food prediction fallback to name match:", modelErr);
+            try {
+              const matchedFood = findNutritionMatch(fname);
+              if (matchedFood) {
+                foodName = matchedFood.name;
+                carbsEstimate = Number(matchedFood.carbs_g) || 50.0;
+              }
+            } catch { /* ignore */ }
+          }
+
           resultData = {
             status: "success",
             detected_type: carbsEstimate > 40 ? "MEAL_HIGH_CARB" : "MEAL_LOW_CARB",
             title: `AI Vision: ${foodName}`,
-            confidence: 0.95,
+            confidence: conf,
             estimated_carbs: carbsEstimate,
             detected_items: [
-              { label: `${foodName} (${carbsEstimate}g Carbs)`, confidence: 0.95, carbs: carbsEstimate, box: [15, 15, 70, 70] },
+              { label: `${foodName} (${carbsEstimate}g Carbs)`, confidence: conf, carbs: carbsEstimate, box: [15, 15, 70, 70] },
             ],
             extracted_glucose: null,
-            suggested_action: `AI Vision analyzed meal image and estimated ${carbsEstimate}g carbohydrates. Auto-applied to forecast.`,
+            suggested_action: `AI Vision recognized ${foodName} (${carbsEstimate}g carbohydrates). Auto-applied to forecast.`,
             image_url: localPreviewUrl,
           };
         }
@@ -1117,25 +1119,38 @@ export default function GlucosePredictionPage({ onBack, userId }) {
                       const f = e.dataTransfer.files?.[0];
                       if (f) handleRunVisionDetection("custom", f);
                     }}
-                    className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white/70 hover:bg-indigo-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all group"
+                    className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white/80 hover:bg-indigo-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all group shadow-xs"
                   >
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) handleRunVisionDetection("custom", f);
+                        e.target.value = "";
                       }}
                     />
-                    <UploadCloud className="w-8 h-8 text-indigo-400 group-hover:text-indigo-600 mx-auto mb-1.5 transition-colors" />
+                    <UploadCloud className="w-8 h-8 text-indigo-500 group-hover:text-indigo-600 mx-auto mb-2 transition-transform group-hover:scale-110" />
                     <p className="text-xs font-bold text-slate-800">
                       Drop Meal Photo or Meter Display
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       or click to browse from device (JPEG, PNG)
                     </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm cursor-pointer transition-all"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Upload Meal Photo</span>
+                    </button>
                   </div>
 
                   {/* Preset Demo Buttons */}

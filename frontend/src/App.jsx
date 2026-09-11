@@ -1076,9 +1076,6 @@ export default function App() {
       const detail = e.detail || {};
       setHazardAlertActive(true);
       setGlobalHazardDetail(detail);
-      playEmergencyAlarm(10); // 10-second hospital monitor alarm
-      setGlobalDispatchMode("call");
-      setGlobalDispatchOpen(true);
     };
 
     window.addEventListener("tiva-alert-updated", refresh);
